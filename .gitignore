@@ -9,3 +9,6 @@ pharmatrack.db-shm
 .env.local
 .vercel
 scratch/
+
+.vercel
+.env*

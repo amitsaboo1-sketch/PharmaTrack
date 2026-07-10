@@ -23,7 +23,7 @@ export default function loginPage(onSuccess) {
   return h('div', { class: 'login-wrap' },
     h('form', { class: 'login-card', onsubmit: submit },
       h('div', { class: 'logo' }, h('div', { class: 'logo-mark' }, 'P'), 'PharmaTrack'),
-      h('div', { class: 'tagline' }, 'Marketing Activity Management & ROI Intelligence'),
+      h('div', { class: 'tagline' }, 'Marketing Activity Management & ROI Intelligence · East Africa Pool'),
       h('div', { class: 'field' }, h('label', {}, 'Email'), email),
       h('div', { class: 'field' }, h('label', {}, 'Password'), password),
       h('button', { class: 'btn primary', style: 'width:100%; padding:10px;' }, 'Sign in'),
