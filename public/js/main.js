@@ -110,7 +110,14 @@ async function render() {
 
   if (!session.token || route === 'login') {
     app.innerHTML = '';
-    app.append(loginPage(() => { location.hash = '#/dashboard'; }));
+    app.append(loginPage(() => {
+      // Go to the dashboard after login. Set the hash WITHOUT relying on the
+      // 'hashchange' event (which doesn't fire if the hash is already
+      // '#/dashboard', leaving the page blank until a manual reload), then
+      // render explicitly so the transition is deterministic.
+      history.replaceState(null, '', '#/dashboard');
+      render();
+    }));
     return;
   }
   const user = session.user;
