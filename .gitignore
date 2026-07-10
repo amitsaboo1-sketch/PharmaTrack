@@ -1,0 +1,11 @@
+node_modules/
+pharmatrack.db
+pharmatrack.db-wal
+pharmatrack.db-shm
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.local
+.vercel
+scratch/

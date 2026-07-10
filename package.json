@@ -1,0 +1,17 @@
+{
+  "name": "pharma-roi-platform",
+  "version": "1.0.0",
+  "description": "Pharma Marketing Activity Management & ROI Intelligence Platform",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/smoke.test.js"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.4",
+    "bcryptjs": "^2.4.3",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "license": "UNLICENSED"
+}
