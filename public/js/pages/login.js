@@ -1,5 +1,5 @@
 import { api, session } from '../api.js';
-import { h, toast } from '../ui.js';
+import { h, toast, BRAND_SVG } from '../ui.js';
 
 export default function loginPage(onSuccess) {
   const email = h('input', { type: 'email', placeholder: 'you@company.com', autocomplete: 'username' });
@@ -22,8 +22,8 @@ export default function loginPage(onSuccess) {
 
   return h('div', { class: 'login-wrap' },
     h('form', { class: 'login-card', onsubmit: submit },
-      h('div', { class: 'logo' }, h('div', { class: 'logo-mark' }, 'P'), 'PharmaTrack'),
-      h('div', { class: 'tagline' }, 'Marketing Activity Management & ROI Intelligence'),
+      h('div', { class: 'logo' }, h('div', { class: 'logo-mark', html: BRAND_SVG }), 'Pharos'),
+      h('div', { class: 'tagline' }, 'Illuminate every move in the field.'),
       h('div', { class: 'field' }, h('label', {}, 'Email'), email),
       h('div', { class: 'field' }, h('label', {}, 'Password'), password),
       h('button', { class: 'btn primary', style: 'width:100%; padding:10px;' }, 'Sign in'),

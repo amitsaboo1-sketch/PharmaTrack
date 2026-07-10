@@ -19,7 +19,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', app: 'PharmaTrack ROI Platform' }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', app: 'Pharos ROI Platform' }));
 
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api', requireAuth, require('./routes/masters.routes'));
@@ -43,7 +43,7 @@ app.use((err, req, res, next) => {
 // by api/index.js and invoked as a serverless function, so we must NOT call listen there.
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`PharmaTrack ROI Platform running at http://localhost:${PORT}`);
+    console.log(`Pharos ROI Platform running at http://localhost:${PORT}`);
   });
 }
 

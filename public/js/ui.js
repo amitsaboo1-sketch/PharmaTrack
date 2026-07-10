@@ -1,5 +1,19 @@
 // Small DOM + component helpers shared by all pages.
 
+// Pharos lighthouse brand mark (self-contained indigo badge, scales to any size).
+export const BRAND_SVG = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pharos">
+  <rect width="64" height="64" rx="15" fill="#4f46e5"/>
+  <polygon points="32,18 13,11 15,20" fill="#fbbf24" opacity="0.9"/>
+  <polygon points="32,18 51,11 49,20" fill="#fbbf24" opacity="0.9"/>
+  <polygon points="24,13 40,13 32,6" fill="#ffffff"/>
+  <rect x="26" y="13" width="12" height="7" fill="#ffffff"/>
+  <rect x="28" y="15" width="8" height="5" rx="1" fill="#fbbf24"/>
+  <polygon points="26,20 38,20 42,50 22,50" fill="#ffffff"/>
+  <rect x="23.5" y="29" width="17" height="4" fill="#4f46e5"/>
+  <rect x="22" y="40" width="20" height="4" fill="#4f46e5"/>
+  <rect x="19" y="50" width="26" height="5" rx="1.5" fill="#ffffff"/>
+</svg>`;
+
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {

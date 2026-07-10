@@ -1,4 +1,6 @@
-# PharmaTrack — Pharma Marketing Activity Management & ROI Intelligence Platform
+# Pharos — Pharma Marketing Activity Management & ROI Intelligence Platform
+
+_Illuminate every move in the field._
 
 Single source of truth for pharma marketing spend: **propose → approve → execute → track attendance → import sales → measure doctor-level ROI**.
 

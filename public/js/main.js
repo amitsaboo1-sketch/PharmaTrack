@@ -1,6 +1,6 @@
 // App shell: hash router + role-based sidebar.
 import { api, session } from './api.js';
-import { h } from './ui.js';
+import { h, BRAND_SVG } from './ui.js';
 
 import loginPage from './pages/login.js';
 import dashboardPage from './pages/dashboard.js';
@@ -124,7 +124,7 @@ async function render() {
   const counts = await badgeCounts(user);
 
   const sidebar = h('aside', { class: 'sidebar' },
-    h('div', { class: 'logo' }, h('div', { class: 'logo-mark' }, 'P'), 'PharmaTrack'),
+    h('div', { class: 'logo' }, h('div', { class: 'logo-mark', html: BRAND_SVG }), 'Pharos'),
     NAV.filter((n) => n.section || isVisible(n, user)).map((n) =>
       n.section
         ? h('div', { class: 'nav-section' }, n.section)
@@ -137,7 +137,7 @@ async function render() {
 
   const content = h('div', { class: 'content' });
   const topbar = h('header', { class: 'topbar' },
-    h('h1', {}, TITLES[route] || 'PharmaTrack'),
+    h('h1', {}, TITLES[route] || 'Pharos'),
     h('div', { class: 'spacer' }),
     h('button', { class: 'bell', title: 'Notifications', onclick: () => showNotifications() },
       '🔔', counts.unread ? h('span', { class: 'dot' }, String(counts.unread)) : null),

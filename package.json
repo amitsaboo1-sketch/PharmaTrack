@@ -1,7 +1,7 @@
 {
-  "name": "pharma-roi-platform",
+  "name": "pharos",
   "version": "1.0.0",
-  "description": "Pharma Marketing Activity Management & ROI Intelligence Platform",
+  "description": "Pharos — Pharma Marketing Activity Management & ROI Intelligence Platform",
   "main": "server/index.js",
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
