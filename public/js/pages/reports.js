@@ -30,7 +30,7 @@ async function salesReports(root, user) {
     root.append(h('div', { class: 'grid cards-4' },
       kpiCard('Value Achievement (YTD)', o.valuePct == null ? '—' : `${o.valuePct.toFixed(0)}%`, `${fmtMoney(o.achievedValue, cur)} / ${fmtMoney(o.targetValue, cur)}`, (o.valuePct ?? 0) >= 100 ? 'up' : 'down'),
       kpiCard('YoY Growth (value)', fmtPct(perf.yoy.valueYoYPct), `vs ${perf.yoy.lastFyLabel}`, (perf.yoy.valueYoYPct ?? 0) >= 0 ? 'up' : 'down'),
-      kpiCard('My Activity ROI', fmtPct(dash?.myRoiPct), `account-wise`, (dash?.myRoiPct ?? 0) >= 0 ? 'up' : 'down'),
+      kpiCard('My Activity Marketing Effectiveness', fmtPct(dash?.myRoiPct), `account-wise`, (dash?.myRoiPct ?? 0) >= 0 ? 'up' : 'down'),
       kpiCard('Reporting period', perf.fyLabel, perf.ytdLabel)));
   }
 
@@ -105,12 +105,12 @@ async function salesReports(root, user) {
       datasets: [{ type: 'bar', label: `Value (${cur})`, data: prod.lastFY.months.map((m) => byMonth[m.key] || 0), backgroundColor: '#0891b2', borderRadius: 4 }] } });
   }
 
-  // ---------- 5) Account-wise Rep ROI ----------
+  // ---------- 5) Account-wise Rep Marketing Effectiveness ----------
   if (reps.length) {
-    root.append(sectionCard('Rep ROI — account-wise attribution',
+    root.append(sectionCard('Rep Marketing Effectiveness — account-wise attribution',
       h('div', { class: 'hint', style: 'margin-bottom:8px;' },
-        'Sales are country-wide, but every doctor/chemist is owned by one rep. Each rep\'s sales = sales through their accounts; ROI = incremental on those accounts ÷ their activity spend.'),
-      table(['Rep', 'Country', 'Owned Doctors', 'Owned Chemists', 'Account Sales (YTD)', 'Activities', 'Spend', 'Incremental', 'ROI'],
+        'Sales are country-wide, but every doctor/chemist is owned by one rep. Each rep\'s sales = sales through their accounts; Marketing Effectiveness = incremental on those accounts ÷ their activity spend.'),
+      table(['Rep', 'Country', 'Owned Doctors', 'Owned Chemists', 'Account Sales (YTD)', 'Activities', 'Spend', 'Incremental', 'Marketing Effectiveness'],
         reps.map((r) => [h('b', {}, r.name), r.country, String(r.ownedDoctors), String(r.ownedChemists),
           fmtMoney(r.accountSalesYTD, cur), String(r.activities), fmtMoney(r.spend, cur), fmtMoney(r.incremental, cur),
           r.roiPct == null ? h('span', { class: 'hint' }, 'n/a') : h('b', { style: `color:${r.roiPct >= 0 ? 'var(--accent)' : 'var(--danger)'}` }, fmtPct(r.roiPct))]))));
@@ -159,18 +159,18 @@ async function salesReports(root, user) {
     makeChart(expCanvas, { type: 'doughnut', data: { labels: dash.expenseByCategory.map((e) => e.category), datasets: [{ data: dash.expenseByCategory.map((e) => e.amount), backgroundColor: colors(dash.expenseByCategory.length) }] } });
   }
 
-  // ---------- 8) Doctor ROI ----------
+  // ---------- 8) Doctor Marketing Effectiveness ----------
   if (dash?.topDoctors?.length) {
     const roiCanvas = chartCanvas();
-    root.append(sectionCard('Doctor ROI',
+    root.append(sectionCard('Doctor Marketing Effectiveness',
       h('div', { class: 'grid cols-3-1' },
-        table(['Doctor', 'Speciality', 'Allocated Spend', 'Incremental Sales', 'ROI'],
+        table(['Doctor', 'Speciality', 'Allocated Spend', 'Incremental Sales', 'Marketing Effectiveness'],
           dash.topDoctors.map((dd) => [h('a', { href: `#/doctor/${dd.key}` }, dd.label), dd.sublabel || '—',
             fmtMoney(dd.cost, cur), fmtMoney(dd.incremental, cur),
             dd.roiPct == null ? h('span', { class: 'hint' }, 'n/a') : h('b', { style: `color:${dd.roiPct >= 0 ? 'var(--accent)' : 'var(--danger)'}` }, fmtPct(dd.roiPct))]),
           (i) => (location.hash = `#/doctor/${dash.topDoctors[i].key}`)),
         h('div', { class: 'chart-box sm' }, roiCanvas))));
-    makeChart(roiCanvas, { type: 'bar', data: { labels: dash.topDoctors.map((dd) => dd.label), datasets: [{ label: 'ROI %', data: dash.topDoctors.map((dd) => dd.roiPct), backgroundColor: dash.topDoctors.map((dd) => (dd.roiPct ?? 0) >= 0 ? '#059669' : '#dc2626'), borderRadius: 4 }] }, options: { plugins: { legend: { display: false } } } });
+    makeChart(roiCanvas, { type: 'bar', data: { labels: dash.topDoctors.map((dd) => dd.label), datasets: [{ label: 'Marketing Effectiveness %', data: dash.topDoctors.map((dd) => dd.roiPct), backgroundColor: dash.topDoctors.map((dd) => (dd.roiPct ?? 0) >= 0 ? '#059669' : '#dc2626'), borderRadius: 4 }] }, options: { plugins: { legend: { display: false } } } });
   }
 
   // ---------- 9) Daily Allowance ----------
@@ -208,15 +208,15 @@ async function hoReports(root) {
 
   const reps = await api('/performance/reps').catch(() => []);
   if (reps.length) root.append(h('div', { class: 'card', style: 'margin-top:14px;' },
-    h('h3', {}, 'Rep ROI — account-wise attribution'),
-    table(['Rep', 'Country', 'Doctors', 'Chemists', 'Account Sales (YTD)', 'Activities', 'Spend', 'Incremental', 'ROI'],
+    h('h3', {}, 'Rep Marketing Effectiveness — account-wise attribution'),
+    table(['Rep', 'Country', 'Doctors', 'Chemists', 'Account Sales (YTD)', 'Activities', 'Spend', 'Incremental', 'Marketing Effectiveness'],
       reps.map((r) => [h('b', {}, r.name), r.country, String(r.ownedDoctors), String(r.ownedChemists),
         fmtMoney(r.accountSalesYTD), String(r.activities), fmtMoney(r.spend), fmtMoney(r.incremental),
         r.roiPct == null ? h('span', { class: 'hint' }, 'n/a') : h('b', { style: `color:${r.roiPct >= 0 ? 'var(--accent)' : 'var(--danger)'}` }, fmtPct(r.roiPct))]))));
 
   const catalog = [
     ['activities', 'Activity Report'], ['expenses', 'Expense Report'], ['attendance', 'Attendance Report'],
-    ['doctor-roi', 'Doctor ROI'], ['employee-roi', 'Employee ROI'], ['brand-roi', 'Brand ROI'],
+    ['doctor-roi', 'Doctor Marketing Effectiveness'], ['employee-roi', 'Employee Marketing Effectiveness'], ['brand-roi', 'Brand Marketing Effectiveness'],
     ['sales', 'Sales Data'], ['audit', 'Audit Report'],
   ];
   root.append(h('h3', { style: 'margin:20px 0 10px;' }, 'Finance & Audit exports (Head Office only)'));

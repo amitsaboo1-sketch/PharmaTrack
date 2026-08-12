@@ -23,7 +23,7 @@ async function executive(root) {
         c.budgetUtilizationPct != null ? `${c.budgetUtilizationPct.toFixed(0)}% of planned budget` : ''),
       kpiCard('Activities', String(c.activities), `${c.completed} completed`),
       kpiCard('Pending Approvals', String(c.pendingApprovals), c.pendingApprovals ? 'Action needed' : 'All clear', c.pendingApprovals ? 'down' : 'up'),
-      kpiCard('Blended ROI', fmtPct(c.blendedRoiPct), `Incremental sales ${fmtMoney(c.incrementalSales)}`, (c.blendedRoiPct ?? 0) >= 0 ? 'up' : 'down')));
+      kpiCard('Blended Marketing Effectiveness', fmtPct(c.blendedRoiPct), `Incremental sales ${fmtMoney(c.incrementalSales)}`, (c.blendedRoiPct ?? 0) >= 0 ? 'up' : 'down')));
 
   const spendCanvas = chartCanvas();
   const typeCanvas = chartCanvas();
@@ -45,7 +45,7 @@ async function executive(root) {
 
   root.append(h('div', { class: 'grid cols-2', style: 'margin-top:14px;' },
     h('div', { class: 'card' }, h('h3', {}, 'Spend by Activity Type'), h('div', { class: 'chart-box sm' }, typeCanvas)),
-    h('div', { class: 'card' }, h('h3', {}, 'ROI by Brand'), h('div', { class: 'chart-box sm' }, brandCanvas))));
+    h('div', { class: 'card' }, h('h3', {}, 'Marketing Effectiveness by Brand'), h('div', { class: 'chart-box sm' }, brandCanvas))));
 
   // ----- East Africa pool: consolidated performance per country (value; YoY), each own currency -----
   const pool = await api('/performance/pool');
@@ -63,8 +63,8 @@ async function executive(root) {
       ]))));
 
   root.append(h('div', { class: 'card', style: 'margin-top:14px;' },
-    h('h3', {}, 'Rep Performance Leaderboard (marketing ROI)'),
-    table(['Representative', 'Country', 'Activities', 'Spend', 'Incremental Sales', 'ROI'],
+    h('h3', {}, 'Rep Performance Leaderboard (marketing effectiveness)'),
+    table(['Representative', 'Country', 'Activities', 'Spend', 'Incremental Sales', 'Marketing Effectiveness'],
       d.repRoi.map((r) => [r.label, r.sublabel, String(r.activities), fmtMoney(r.cost), fmtMoney(r.incremental),
         h('b', { style: `color:${(r.roiPct ?? 0) >= 0 ? 'var(--accent)' : 'var(--danger)'}` }, fmtPct(r.roiPct))]))));
 
@@ -78,7 +78,7 @@ async function executive(root) {
   makeChart(typeCanvas, { type: 'doughnut',
     data: { labels: d.spendByType.map((x) => x.type), datasets: [{ data: d.spendByType.map((x) => x.spend), backgroundColor: colors(d.spendByType.length) }] } });
   makeChart(brandCanvas, { type: 'bar',
-    data: { labels: d.brandRoi.map((b) => b.label), datasets: [{ label: 'ROI %', data: d.brandRoi.map((b) => b.roiPct), backgroundColor: d.brandRoi.map((b) => (b.roiPct ?? 0) >= 0 ? '#059669' : '#dc2626'), borderRadius: 5 }] },
+    data: { labels: d.brandRoi.map((b) => b.label), datasets: [{ label: 'Marketing Effectiveness %', data: d.brandRoi.map((b) => b.roiPct), backgroundColor: d.brandRoi.map((b) => (b.roiPct ?? 0) >= 0 ? '#059669' : '#dc2626'), borderRadius: 5 }] },
     options: { plugins: { legend: { display: false } } } });
 }
 
@@ -102,7 +102,7 @@ async function salesDash(root) {
   root.append(h('div', { class: 'grid cards-4' },
     ring('Value Achievement (YTD)', fmtMoney(o.achievedValue, cur), fmtMoney(o.targetValue, cur), o.valuePct),
     kpiCard('YoY Growth (value)', fmtPct(perf.yoy.valueYoYPct), `vs ${perf.yoy.lastFyLabel} same period`, (perf.yoy.valueYoYPct ?? 0) >= 0 ? 'up' : 'down'),
-    kpiCard('My Activity ROI (account-wise)', fmtPct(d.myRoiPct), `Spend ${fmtMoney(d.totalSpend, cur)} → +${fmtMoney(d.incrementalSales, cur)}`, (d.myRoiPct ?? 0) >= 0 ? 'up' : 'down'),
+    kpiCard('My Activity Marketing Effectiveness (account-wise)', fmtPct(d.myRoiPct), `Spend ${fmtMoney(d.totalSpend, cur)} → +${fmtMoney(d.incrementalSales, cur)}`, (d.myRoiPct ?? 0) >= 0 ? 'up' : 'down'),
     kpiCard('My Approvals Pending', String(d.statusCounts.submitted || 0), `${d.statusCounts.approved || 0} approved · ${d.statusCounts.draft || 0} draft`)));
 
   // Brand-wise: units per brand (NOT clubbed), value + %

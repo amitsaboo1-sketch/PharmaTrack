@@ -1,8 +1,8 @@
-# Pharos — Pharma Marketing Activity Management & ROI Intelligence Platform
+# Pharos — Pharma Marketing Activity Management & Marketing Effectiveness Intelligence Platform
 
 _Illuminate every move in the field._
 
-Single source of truth for pharma marketing spend: **propose → approve → execute → track attendance → import sales → measure doctor-level ROI**.
+Single source of truth for pharma marketing spend: **propose → approve → execute → track attendance → import sales → measure doctor-level Marketing Effectiveness**.
 
 Clean rebuild of the Antigravity prototype (`pharma-roi-portal`), keeping its best ideas — doctor↔chemist sales attribution, field-account verification/merge, discrepancy audit — on an enterprise-shaped architecture (JWT auth, RBAC, audit trail, modular API, import batches with rollback).
 
@@ -53,7 +53,7 @@ expense proofs, routed to HO for approval.
 2. Sign in as **amit** → *Approvals* → open it → **Approve**.
 3. Back as **rohan** → open the activity → **Record Execution** (tick attendees, expense breakup).
 4. As **amit** → *Sales Import* → download template, upload a CSV for the following months → **Commit**.
-5. Open the activity again → the **ROI panel** shows before/after attribution per doctor. *ROI Analytics* ranks doctors/reps/brands; *Audit Trail* shows every step.
+5. Open the activity again → the **Marketing Effectiveness panel** shows before/after attribution per doctor. *Marketing Effectiveness Analytics* ranks doctors/reps/brands; *Audit Trail* shows every step.
 
 ## Documentation
 
@@ -62,7 +62,7 @@ All pre-build deliverables (PRD, FRS, role matrix, NFR/security, ER design, API 
 ## Layout
 
 ```
-server/   Express API — routes / services (ROI, CSV) / middleware (auth, audit) / db (schema, seed)
+server/   Express API — routes / services (Marketing Effectiveness, CSV) / middleware (auth, audit) / db (schema, seed)
 public/   Zero-build SPA — hash router, page modules, Chart.js
 docs/     Deliverables 1–20
 test/     Critical-path smoke suite (node:test)

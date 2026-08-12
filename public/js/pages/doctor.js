@@ -15,7 +15,7 @@ export default async function doctorPage(root, id) {
   root.append(h('div', { class: 'grid cards-4' },
     kpiCard('Historical Spend (allocated)', fmtMoney(d.historicalSpend)),
     kpiCard('Incremental Sales', fmtMoney(d.incremental)),
-    kpiCard('Doctor ROI', fmtPct(d.roiPct), null, (d.roiPct ?? 0) >= 0 ? 'up' : 'down'),
+    kpiCard('Doctor Marketing Effectiveness', fmtPct(d.roiPct), null, (d.roiPct ?? 0) >= 0 ? 'up' : 'down'),
     kpiCard('Engagements', String(d.engagements.length), `${d.engagements.filter((e) => e.attended).length} attended`)));
 
   const trendCanvas = chartCanvas();

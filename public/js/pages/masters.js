@@ -223,7 +223,7 @@ function typePill(type) {
 async function chemists(root, user) {
   const listBox = h('div');
   root.append(h('div', { class: 'page-head' },
-    h('div', { class: 'hint' }, 'Chemists, wholesalers and stockists. Trade activities on these accounts are ROI-measured too.'),
+    h('div', { class: 'hint' }, 'Chemists, wholesalers and stockists. Trade activities on these accounts are measured for marketing effectiveness too.'),
     h('div', { class: 'spacer' }),
     user.role === 'ho'
       ? h('div', { style: 'display:flex; gap:8px;' },

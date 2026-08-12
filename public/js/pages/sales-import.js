@@ -80,7 +80,7 @@ export default async function salesImportPage(root) {
       stage.innerHTML = '';
       stage.append(h('div', { class: 'card' },
         h('h3', {}, '✅ Import complete'),
-        h('p', {}, `Batch #${r.batchId} committed with ${r.rows} rows. Dashboards and ROI figures now include this data.`),
+        h('p', {}, `Batch #${r.batchId} committed with ${r.rows} rows. Dashboards and Marketing Effectiveness figures now include this data.`),
         h('button', { class: 'btn primary', style: 'margin-top:12px;', onclick: stepUpload }, 'Import another file')));
       loadHistory();
     } catch { stepValidate(); }

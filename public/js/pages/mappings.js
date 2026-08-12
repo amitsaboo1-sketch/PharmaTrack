@@ -6,7 +6,7 @@ export default async function mappingsPage(root) {
   root.append(
     h('div', { class: 'hint', style: 'margin-bottom:12px;' },
       'A doctor can dispense through several pharmacies — link each doctor to all their chemists. ' +
-      'The ROI engine attributes every mapped chemist\'s monthly sales to that doctor.'),
+      'The Marketing Effectiveness engine attributes every mapped chemist\'s monthly sales to that doctor.'),
     box);
 
   async function load() {

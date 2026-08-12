@@ -10,7 +10,7 @@ export default async function roiPage(root) {
       'Attribution model: Before-vs-After monthly average (window configurable in Settings). A doctor\'s sales stream = direct doctor-tagged sales + sales of their mapped chemists.'),
     tabs, box);
 
-  const scopes = [['hcp', 'Doctor ROI'], ['chemist', 'Chemist / Wholesaler ROI'], ['employee', 'Employee ROI'], ['brand', 'Brand ROI']];
+  const scopes = [['hcp', 'Doctor Marketing Effectiveness'], ['chemist', 'Chemist / Wholesaler Marketing Effectiveness'], ['employee', 'Employee Marketing Effectiveness'], ['brand', 'Brand Marketing Effectiveness']];
 
   function renderTabs() {
     tabs.innerHTML = '';
@@ -27,10 +27,10 @@ export default async function roiPage(root) {
     renderTabs();
     const rows = await api(`/roi/leaderboard?scope=${scope}`);
     const headers = {
-      hcp: ['Doctor', 'Speciality', 'Activities', 'Allocated Cost', 'Incremental Sales', 'ROI'],
-      chemist: ['Chemist / Wholesaler', 'Type', 'Activities', 'Allocated Cost', 'Incremental Sales', 'ROI'],
-      employee: ['Employee', 'Territory', 'Activities', 'Spend', 'Incremental Sales', 'ROI'],
-      brand: ['Brand', 'Therapy Area', 'Activities', 'Spend', 'Incremental Sales', 'ROI'],
+      hcp: ['Doctor', 'Speciality', 'Activities', 'Allocated Cost', 'Incremental Sales', 'Marketing Effectiveness'],
+      chemist: ['Chemist / Wholesaler', 'Type', 'Activities', 'Allocated Cost', 'Incremental Sales', 'Marketing Effectiveness'],
+      employee: ['Employee', 'Territory', 'Activities', 'Spend', 'Incremental Sales', 'Marketing Effectiveness'],
+      brand: ['Brand', 'Therapy Area', 'Activities', 'Spend', 'Incremental Sales', 'Marketing Effectiveness'],
     }[scope];
     const link = (r) => scope === 'hcp' ? h('a', { href: `#/doctor/${r.key}` }, r.label)
       : scope === 'chemist' ? h('a', { href: `#/chemist/${r.key}` }, r.label) : h('b', {}, r.label);

@@ -135,17 +135,17 @@ export default async function activityDetailPage(root, id) {
         isOwner ? h('button', { class: 'btn sm primary', onclick: () => addPhotosModal() }, '＋ Add') : null),
       attachmentGallery(a.attachments)));
 
-    const roiBox = h('div', { class: 'card', style: 'margin-top:14px;' }, h('h3', {}, 'ROI — Before vs After attribution'));
+    const roiBox = h('div', { class: 'card', style: 'margin-top:14px;' }, h('h3', {}, 'Marketing Effectiveness — Before vs After attribution'));
     root.append(roiBox);
     const r = await api(`/roi/activity/${id}`);
     if (!r.available) {
-      roiBox.append(h('div', { class: 'empty' }, r.reason || 'ROI not available yet'));
+      roiBox.append(h('div', { class: 'empty' }, r.reason || 'Marketing Effectiveness not available yet'));
     } else {
       roiBox.append(
         h('div', { class: 'grid cards-4', style: 'margin-bottom:12px;' },
           mini('Cost', fmtMoney(r.cost)), mini('Baseline sales (window)', fmtMoney(r.baselineSales)),
           mini('Post sales (window)', fmtMoney(r.postSales)),
-          mini('ROI', fmtPct(r.roiPct), (r.roiPct ?? 0) >= 0)),
+          mini('Marketing Effectiveness', fmtPct(r.roiPct), (r.roiPct ?? 0) >= 0)),
         h('div', { class: 'hint', style: 'margin-bottom:10px;' },
           `Model: ${r.model} · window ±${r.windowMonths} months around ${r.activityMonth} · margin ${r.grossMarginPct}% · cost/account ${fmtMoney(r.costPerAccount)}${r.paybackMonths ? ` · payback ~${r.paybackMonths.toFixed(1)} mo` : ''}`));
       if (r.perDoctor.length) {

@@ -17,7 +17,7 @@ export default async function chemistPage(root, id) {
   root.append(h('div', { class: 'grid cards-4' },
     kpiCard('Trade-Activity Spend (allocated)', fmtMoney(d.historicalSpend)),
     kpiCard('Incremental Sales', fmtMoney(d.incremental)),
-    kpiCard('Account ROI', fmtPct(d.roiPct), null, (d.roiPct ?? 0) >= 0 ? 'up' : 'down'),
+    kpiCard('Account Marketing Effectiveness', fmtPct(d.roiPct), null, (d.roiPct ?? 0) >= 0 ? 'up' : 'down'),
     kpiCard('Activities', String(d.engagements.length), `${d.engagements.filter((e) => e.attended).length} attended`)));
 
   const trendCanvas = chartCanvas();

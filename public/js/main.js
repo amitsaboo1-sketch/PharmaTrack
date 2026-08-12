@@ -59,7 +59,7 @@ const NAV = [
   { route: 'users', label: 'Users', icon: '👥', roles: ['admin'] },
   { section: 'Intelligence' },
   { route: 'sales-import', label: 'Sales Import', icon: '⬆', roles: ['ho'] },
-  { route: 'roi', label: 'ROI Analytics', icon: '↗', roles: ['sales', 'ho'] },
+  { route: 'roi', label: 'Marketing Effectiveness Analytics', icon: '↗', roles: ['sales', 'ho'] },
   { route: 'reports', label: 'Reports', icon: '⎙', roles: ['sales', 'ho'] },
   { route: 'audit', label: 'Audit Trail', icon: '🛡', roles: ['ho'] },
   { section: 'Account' },
@@ -72,7 +72,7 @@ const TITLES = {
   chemists: 'Chemist / Wholesaler Master', chemist: 'Chemist 360°', brands: 'Brands & Products', users: 'User Management',
   mappings: 'Doctor–Chemist Mapping', verification: 'Field Account Verification',
   'daily-allowance': 'Daily Allowance', country: 'Country Performance', 'sales-import': 'Monthly Sales Import',
-  roi: 'ROI Analytics', reports: 'Reports', audit: 'Audit Trail', settings: 'Settings',
+  roi: 'Marketing Effectiveness Analytics', reports: 'Reports', audit: 'Audit Trail', settings: 'Settings',
 };
 
 function parseHash() {
