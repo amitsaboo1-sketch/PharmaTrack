@@ -120,7 +120,7 @@ async function salesDash(root) {
   const brandCanvas = chartCanvas();
   root.append(h('div', { class: 'grid cols-2', style: 'margin-top:14px;' },
     h('div', { class: 'card' }, h('h3', {}, `Monthly Target vs Achievement (Value, ${cur})`), h('div', { class: 'chart-box sm' }, trendCanvas)),
-    h('div', { class: 'card' }, h('h3', {}, 'Brand Achievement % (Value)'), h('div', { class: 'chart-box sm' }, brandCanvas))));
+    h('div', { class: 'card' }, h('h3', {}, 'Monthly Brand Achievement % (Value)'), h('div', { class: 'chart-box sm' }, brandCanvas))));
 
   const daApproved = (d.daSummary.find((s) => s.status === 'approved') || {}).da_total || 0;
   const daPending = (d.daSummary.find((s) => s.status === 'submitted') || {}).da_total || 0;

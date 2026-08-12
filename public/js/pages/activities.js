@@ -6,7 +6,7 @@ export default async function activitiesPage(root) {
   const filters = { status: '', type: '' };
 
   const listBox = h('div');
-  const statusSel = select([['', 'All statuses'], ...['draft', 'submitted', 'approved', 'returned', 'rejected', 'executed'].map((s) => [s, s])],
+  const statusSel = select([['', 'All Status'], ...['draft', 'submitted', 'approved', 'returned', 'rejected', 'executed'].map((s) => [s, s])],
     { onchange: (e) => { filters.status = e.target.value; load(); } });
   const types = await api('/activity-types');
   const typeSel = select([['', 'All types'], ...types.map((t) => [t.id, t.name])],
@@ -26,10 +26,11 @@ export default async function activitiesPage(root) {
     const acts = await api(`/activities${qs ? '?' + qs : ''}`);
     listBox.innerHTML = '';
     listBox.append(h('div', { class: 'card' },
-      table(['Activity', 'Type / Brand', 'Owner', 'Date', 'Est. Cost', 'Actual', 'HCPs (prop→att)', 'Status'],
+      table(['Activity', 'Type', 'Brand', 'Owner', 'Date', 'Est. Cost', 'Actual', 'HCPs (prop→att)', 'Status'],
         acts.map((a) => [
           h('div', {}, h('b', {}, a.title), h('div', { class: 'sub' }, a.id)),
-          `${a.type_name || a.type_id}${a.brand_name ? ' · ' + a.brand_name : ''}`,
+          a.type_name || a.type_id,
+          a.brand_name || '—',
           a.proposer_name,
           fmtDate(a.actual_date || a.planned_date),
           fmtMoney(a.estimated_cost),

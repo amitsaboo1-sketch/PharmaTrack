@@ -117,7 +117,7 @@ async function salesReports(root, user) {
   }
 
   // ---------- 6) Activity report with live filters ----------
-  const statusSel = select([['', 'All statuses'], ...['draft', 'submitted', 'approved', 'returned', 'rejected', 'executed'].map((s) => [s, s])]);
+  const statusSel = select([['', 'All Status'], ...['draft', 'submitted', 'approved', 'returned', 'rejected', 'executed'].map((s) => [s, s])]);
   const typeSel = select([['', 'All types'], ...activityTypes.map((t) => [t.id, t.name])]);
   const abrandSel = select([['', 'All brands'], ...brands.map((b) => [b.id, b.name])]);
   const fromInp = h('input', { type: 'date' });
@@ -174,7 +174,7 @@ async function salesReports(root, user) {
   }
 
   // ---------- 9) Daily Allowance ----------
-  const daStatusSel = select([['', 'All statuses'], ['submitted', 'Pending'], ['approved', 'Approved'], ['rejected', 'Rejected']]);
+  const daStatusSel = select([['', 'All Status'], ['submitted', 'Pending'], ['approved', 'Approved'], ['rejected', 'Rejected']]);
   const daBox = h('div');
   const daChart = h('div', { class: 'chart-box sm' });
   let daChartObj;
