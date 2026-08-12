@@ -286,10 +286,12 @@ async function brands(root) {
       productRows.map((p) => [
         p.id, h('b', {}, p.name), p.brand_name, p.pack || '—',
         p.prices && p.prices.length
-          ? h('div', { style: 'display:flex; flex-wrap:wrap; gap:5px;' }, p.prices.map((pr) =>
-              h('span', { style: 'background:var(--primary-soft); color:var(--primary); border-radius:999px; padding:2px 8px; font-size:11.5px; font-weight:600;' },
-                `${pr.country_code} ${fmtMoney(pr.ptr, pr.currency_code)}`)))
-          : h('span', { class: 'hint' }, 'not marketed anywhere yet'),
+          ? h('div', { style: 'display:flex; flex-wrap:wrap; gap:6px;' },
+              [...p.prices].sort((a, b) => (a.country_code || '').localeCompare(b.country_code || '')).map((pr) =>
+                h('span', { style: 'display:inline-flex; align-items:center; border:1px solid var(--border); border-radius:6px; overflow:hidden; white-space:nowrap;' },
+                  h('span', { style: 'background:var(--primary-soft); color:var(--primary); font-weight:700; font-size:10.5px; padding:3px 7px; letter-spacing:.03em;' }, pr.country_code),
+                  h('span', { style: 'padding:3px 8px; font-size:12px;' }, fmtMoney(pr.ptr, pr.currency_code)))))
+          : h('span', { class: 'hint' }, 'Not marketed yet'),
         h('button', { class: 'btn sm', onclick: () => managePrices(p) }, 'Set PTR'),
       ])));
   }
