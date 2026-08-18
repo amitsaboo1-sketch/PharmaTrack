@@ -271,27 +271,61 @@ async function brands(root) {
       h('button', { class: 'btn sm primary', onclick: addBrand }, '+ Brand')),
     table(['ID', 'Name', 'Therapy Area'], brandRows.map((b) => [b.id, h('b', {}, b.name), b.therapy_area || '—']))));
 
+  const PTR_ORDER = ['KE', 'UG', 'TZ', 'MU', 'ZM', 'RW'];
+  const orderedCountries = [...countries].sort((a, b) => PTR_ORDER.indexOf(a.code) - PTR_ORDER.indexOf(b.code));
+  const countrySel = select([['', 'All countries'], ...orderedCountries.map((c) => [c.code, c.name])],
+    { onchange: renderProducts, style: 'max-width:190px;' });
+
   const productsBox = h('div');
   root.append(h('div', { class: 'card' },
-    h('div', { style: 'display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;' },
-      h('h3', { style: 'margin:0;' }, 'Products'),
+    h('div', { style: 'display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap;' },
+      h('div', { style: 'display:flex; align-items:center; gap:10px;' },
+        h('h3', { style: 'margin:0;' }, 'Products'), countrySel),
       h('button', { class: 'btn sm primary', onclick: addProduct }, '+ Product')),
-    h('div', { class: 'hint', style: 'margin-bottom:10px;' }, 'No MRP — each product carries a per-country PTR (Price to Retailer) in local currency. A product is marketed in a country only where a PTR is set.'),
+    h('div', { class: 'hint', style: 'margin-bottom:10px;' }, 'No MRP — each product carries a per-country PTR (Price to Retailer) in local currency. Filter by country to focus on one market.'),
     productsBox));
   renderProducts();
 
+  function priceFor(p, code) {
+    return (p.prices || []).find((pr) => pr.country_code === code);
+  }
+
   function renderProducts() {
     productsBox.innerHTML = '';
-    productsBox.append(table(['ID', 'Name', 'Brand', 'Pack', 'Marketed In (PTR by country)', ''],
+    const code = countrySel.value;
+    if (code) {
+      // Single-country view: one clean PTR column for the selected market.
+      const country = countries.find((c) => c.code === code) || {};
+      productsBox.append(table(['Product', 'Brand', 'Pack', `PTR (${country.currency_code || ''})`, ''],
+        productRows.map((p) => {
+          const pr = priceFor(p, code);
+          return [
+            h('div', {}, h('b', {}, p.name), h('div', { class: 'sub' }, p.id)),
+            p.brand_name, p.pack || '—',
+            pr ? h('b', {}, fmtMoney(pr.ptr, country.currency_code)) : h('span', { class: 'hint' }, 'not marketed'),
+            h('button', { class: 'btn sm', onclick: () => managePrices(p) }, 'Set PTR'),
+          ];
+        })));
+      return;
+    }
+    // All countries: compact price matrix — one column per market, values in local currency.
+    const headers = [
+      'Product', 'Brand',
+      ...orderedCountries.map((c) => h('div', { style: 'line-height:1.15;' },
+        h('div', { style: 'font-weight:700;' }, c.code),
+        h('div', { style: 'font-size:10px; color:var(--muted); font-weight:400;' }, c.currency_code))),
+      '',
+    ];
+    productsBox.append(table(headers,
       productRows.map((p) => [
-        p.id, h('b', {}, p.name), p.brand_name, p.pack || '—',
-        p.prices && p.prices.length
-          ? h('div', { style: 'display:flex; flex-wrap:wrap; gap:6px;' },
-              [...p.prices].sort((a, b) => (a.country_code || '').localeCompare(b.country_code || '')).map((pr) =>
-                h('span', { style: 'display:inline-flex; align-items:center; border:1px solid var(--border); border-radius:6px; overflow:hidden; white-space:nowrap;' },
-                  h('span', { style: 'background:var(--primary-soft); color:var(--primary); font-weight:700; font-size:10.5px; padding:3px 7px; letter-spacing:.03em;' }, pr.country_code),
-                  h('span', { style: 'padding:3px 8px; font-size:12px;' }, fmtMoney(pr.ptr, pr.currency_code)))))
-          : h('span', { class: 'hint' }, 'Not marketed yet'),
+        h('div', {}, h('b', {}, p.name), h('div', { class: 'sub' }, p.id)),
+        p.brand_name,
+        ...orderedCountries.map((c) => {
+          const pr = priceFor(p, c.code);
+          return pr
+            ? h('span', { style: 'font-variant-numeric:tabular-nums;' }, fmtMoney(pr.ptr))
+            : h('span', { style: 'color:var(--muted);' }, '—');
+        }),
         h('button', { class: 'btn sm', onclick: () => managePrices(p) }, 'Set PTR'),
       ])));
   }
