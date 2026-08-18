@@ -91,12 +91,8 @@ export default async function activityDetailPage(root, id) {
   const a = await api(`/activities/${id}`);
   const isOwner = user.role === 'sales' && a.proposed_by === user.id;
   const STAGE_LABEL = { clm: 'Cluster Lead (CLM)', cm: 'Country Manager (CM)', marketing: 'Marketing' };
-  // Sequential approval: the buttons appear only for the approver whose turn it is.
-  const canDecide = a.status === 'submitted' && (
-    (a.approval_stage === 'clm' && user.role === 'clm' && user.country === a.country) ||
-    (a.approval_stage === 'cm' && user.role === 'cm') ||
-    (a.approval_stage === 'marketing' && user.role === 'ho' && ['Product Manager', 'Marketing Head'].includes(user.sub_role))
-  );
+  // The server decides who may act (own stage, an escalated vacancy, or Admin break-glass).
+  const canDecide = !!a.can_decide;
 
   const head = h('div', { class: 'page-head' },
     h('button', { class: 'btn sm', onclick: () => (location.hash = '#/activities') }, '← Back'),

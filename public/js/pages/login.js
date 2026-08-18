@@ -15,10 +15,33 @@ export default function loginPage(onSuccess) {
     } catch { /* toast already shown */ }
   }
 
-  const demo = (mail, label) => h('button', {
-    type: 'button', class: 'chip',
-    onclick: () => { email.value = mail; password.value = 'demo123'; },
-  }, label || mail.split('@')[0]);
+  // Demo accounts grouped by role. Kept in one compact dropdown instead of a wall of chips.
+  const DEMO_GROUPS = [
+    ['Sales reps (SER)', [
+      ['kenya@pharmatrack.demo', 'Kenya'], ['uganda@pharmatrack.demo', 'Uganda'],
+      ['tanzania@pharmatrack.demo', 'Tanzania'], ['rwanda@pharmatrack.demo', 'Rwanda'],
+      ['mauritius@pharmatrack.demo', 'Mauritius'], ['zambia@pharmatrack.demo', 'Zambia'],
+    ]],
+    ['Cluster Leads (CLM)', [
+      ['clm.kenya@pharmatrack.demo', 'CLM · Kenya'], ['clm.uganda@pharmatrack.demo', 'CLM · Uganda'],
+      ['clm.tanzania@pharmatrack.demo', 'CLM · Tanzania'], ['clm.rwanda@pharmatrack.demo', 'CLM · Rwanda'],
+      ['clm.mauritius@pharmatrack.demo', 'CLM · Mauritius'], ['clm.zambia@pharmatrack.demo', 'CLM · Zambia'],
+    ]],
+    ['Management & Head Office', [
+      ['cm@pharmatrack.demo', 'Country Manager (all countries)'],
+      ['amit@pharmatrack.demo', 'Marketing'], ['admin@pharmatrack.demo', 'Admin / Operations'],
+    ]],
+  ];
+
+  const picker = h('select', {
+    class: 'demo-select',
+    style: 'width:100%; padding:9px 10px; border-radius:8px;',
+    onchange: (e) => { if (e.target.value) { email.value = e.target.value; password.value = 'demo123'; password.focus(); } },
+  },
+    h('option', { value: '' }, 'Quick demo login — choose an account…'),
+    DEMO_GROUPS.map(([label, items]) =>
+      h('optgroup', { label },
+        items.map(([mail, name]) => h('option', { value: mail }, name)))));
 
   return h('div', { class: 'login-wrap' },
     h('form', { class: 'login-card', onsubmit: submit },
@@ -27,15 +50,8 @@ export default function loginPage(onSuccess) {
       h('div', { class: 'field' }, h('label', {}, 'Email'), email),
       h('div', { class: 'field' }, h('label', {}, 'Password'), password),
       h('button', { class: 'btn primary', style: 'width:100%; padding:10px;' }, 'Sign in'),
-      h('div', { class: 'demo-chips' },
-        h('span', { class: 'hint', style: 'width:100%; text-align:center;' }, 'Sales reps (SER) — password: demo123'),
-        demo('kenya@pharmatrack.demo'), demo('uganda@pharmatrack.demo'), demo('tanzania@pharmatrack.demo'),
-        demo('mauritius@pharmatrack.demo'), demo('zambia@pharmatrack.demo'), demo('rwanda@pharmatrack.demo'),
-        h('span', { class: 'hint', style: 'width:100%; text-align:center; margin-top:6px;' }, 'Cluster Leads (CLM)'),
-        demo('clm.kenya@pharmatrack.demo', 'CLM Kenya'), demo('clm.uganda@pharmatrack.demo', 'CLM Uganda'),
-        demo('clm.tanzania@pharmatrack.demo', 'CLM Tanzania'), demo('clm.rwanda@pharmatrack.demo', 'CLM Rwanda'),
-        demo('clm.mauritius@pharmatrack.demo', 'CLM Mauritius'), demo('clm.zambia@pharmatrack.demo', 'CLM Zambia'),
-        h('span', { class: 'hint', style: 'width:100%; text-align:center; margin-top:6px;' }, 'Management & Head Office'),
-        demo('cm@pharmatrack.demo', 'Country Manager'), demo('amit@pharmatrack.demo', 'Marketing'),
-        demo('admin@pharmatrack.demo', 'Admin'))));
+      h('div', { class: 'field', style: 'margin-top:14px;' },
+        h('label', {}, 'Demo accounts'),
+        picker,
+        h('span', { class: 'hint', style: 'display:block; margin-top:4px;' }, 'Password for every demo account: demo123'))));
 }

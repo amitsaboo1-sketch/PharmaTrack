@@ -3,14 +3,6 @@ import { h, table, badge, fmtMoney, fmtDate, modal, field, select, toast } from 
 
 const STAGE_LABEL = { clm: 'Cluster Lead (CLM)', cm: 'Country Manager (CM)', admin: 'Admin (Operations)' };
 
-// Can this user act on a DA claim currently sitting at `stage`?
-function canDecideDA(user, stage, countryCode) {
-  if (stage === 'clm') return user.role === 'clm' && user.country === countryCode;
-  if (stage === 'cm') return user.role === 'cm';
-  if (stage === 'admin') return user.role === 'ho' && user.sub_role === 'Admin';
-  return false;
-}
-
 export default async function dailyAllowancePage(root) {
   const user = session.user;
   if (user.role === 'ho' || user.role === 'clm' || user.role === 'cm') return approvalView(root, user);
@@ -155,7 +147,7 @@ async function approvalView(root, user) {
 
   async function review(id) {
     const c = await api(`/da/${id}`);
-    const canDecide = c.status === 'submitted' && canDecideDA(user, c.approval_stage, c.country_code);
+    const canDecide = !!c.can_decide;
     const remarks = h('textarea', { rows: 2, placeholder: 'Remarks (required to reject)' });
     modal(`Review DA — ${c.user_name} · ${fmtDate(c.da_date)}`, [
       infoRow('Location', c.location || '—'),

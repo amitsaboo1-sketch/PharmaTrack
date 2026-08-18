@@ -89,6 +89,9 @@ test('critical path', async () => {
   const clmUg = clmUgLogin.data.token;
   const wrongClm = await call(`/activities/${actId}/decision`, { method: 'POST', token: clmUg, body: { decision: 'approved' } });
   assert.equal(wrongClm.status, 403);
+  // CM cannot skip ahead while the Kenya CLM seat is filled (no vacancy to cover)
+  const cmEarly = await call(`/activities/${actId}/decision`, { method: 'POST', token: cm, body: { decision: 'approved' } });
+  assert.equal(cmEarly.status, 403);
   // CLM (Kenya) signs off → advances to CM
   const dClm = await call(`/activities/${actId}/decision`, { method: 'POST', token: clm, body: { decision: 'approved', remarks: 'clm ok' } });
   assert.equal(dClm.status, 200);
@@ -281,4 +284,47 @@ test('critical path', async () => {
   // 11. rollback batch
   const rb = await call(`/sales/batches/${commit.data.batchId}/rollback`, { method: 'POST', token: ho, body: {} });
   assert.equal(rb.status, 200);
+});
+
+// Vacancy / escalation rules, tested directly against the engine with a stubbed data layer.
+test('vacancy escalation authority', async () => {
+  const { CHAINS, canActResolved } = require('../server/services/approvals');
+  const CM = { role: 'cm' };
+  const ADMIN = { role: 'ho', sub_role: 'Admin' };
+  const CLM_KE = { role: 'clm', country: 'KE' };
+  const MKT = { role: 'ho', sub_role: 'Product Manager' };
+
+  // `present` = seats that are currently filled. Stub answers the COUNT(*) probes by SQL shape.
+  const stubQ = (present) => ({
+    get: async (sql, args) => {
+      let key;
+      if (sql.includes("role='clm'")) key = 'clm:' + args[0];
+      else if (sql.includes("role='cm'")) key = 'cm';
+      else if (sql.includes('Product Manager')) key = 'marketing';
+      else if (sql.includes("sub_role='Admin'")) key = 'admin';
+      return { c: present.has(key) ? 1 : 0 };
+    },
+  });
+  const all = new Set(['clm:KE', 'cm', 'marketing', 'admin']);
+
+  // Normal: everyone can act on their own stage; no one skips a filled seat.
+  assert.equal(await canActResolved(stubQ(all), CLM_KE, CHAINS.activity, 'clm', 'KE'), true);
+  assert.equal(await canActResolved(stubQ(all), CM, CHAINS.activity, 'clm', 'KE'), false); // CLM seat filled
+  assert.equal(await canActResolved(stubQ(all), CM, CHAINS.activity, 'cm', 'KE'), true);
+
+  // Vacant CLM (Kenya): the CM covers the clm stage for Kenya.
+  const noClmKE = new Set(['cm', 'marketing', 'admin']);
+  assert.equal(await canActResolved(stubQ(noClmKE), CM, CHAINS.activity, 'clm', 'KE'), true);
+  // But not for a country whose CLM still exists.
+  assert.equal(await canActResolved(stubQ(new Set(['clm:UG', 'cm', 'marketing', 'admin'])), CM, CHAINS.activity, 'clm', 'UG'), false);
+
+  // Vacant CM: Marketing covers the cm stage (activity chain).
+  const noCm = new Set(['clm:KE', 'marketing', 'admin']);
+  assert.equal(await canActResolved(stubQ(noCm), MKT, CHAINS.activity, 'cm', 'KE'), true);
+
+  // Vacant Marketing on an activity: Admin is the break-glass (even though admin isn't in the activity chain).
+  const noMkt = new Set(['clm:KE', 'cm', 'admin']);
+  assert.equal(await canActResolved(stubQ(noMkt), ADMIN, CHAINS.activity, 'marketing', 'KE'), true);
+  // Admin does NOT get to bypass a filled Marketing seat.
+  assert.equal(await canActResolved(stubQ(all), ADMIN, CHAINS.activity, 'marketing', 'KE'), false);
 });

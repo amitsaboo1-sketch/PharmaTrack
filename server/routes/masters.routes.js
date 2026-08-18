@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { q } = require('../db/connection');
 const { requireRole, requireAdmin } = require('../middleware/auth');
-const { CHAINS, nextStage, canActAtStage, stageForUser, STAGE_LABEL } = require('../services/approvals');
+const { CHAINS, nextStage, canActResolved, stageForUser, verifyPendingCondition, ADD_FLAG, REM_FLAG, STAGE_LABEL } = require('../services/approvals');
 const { audit, notify, notifyStage } = require('../middleware/audit');
 
 // Current pending stage of a field account in the add / removal chains (clm -> cm -> marketing -> admin).
@@ -348,31 +348,18 @@ router.get('/verification/pending', ah(async (req, res) => {
   const stage = stageForUser(req.user);
   const empty = { stage: null, adds: { hcps: [], chemists: [] }, removals: { hcps: [], chemists: [] } };
   if (!['clm', 'cm', 'marketing', 'admin'].includes(stage)) return res.json(empty);
-  const addCondByStage = {
-    clm: 'clm_ok=0 AND verified=0 AND pending_removal=0',
-    cm: 'clm_ok=1 AND cm_ok=0 AND verified=0 AND pending_removal=0',
-    marketing: 'cm_ok=1 AND mkt_verified=0 AND verified=0 AND pending_removal=0',
-    admin: 'mkt_verified=1 AND verified=0 AND pending_removal=0',
-  };
-  const remCondByStage = {
-    clm: 'pending_removal=1 AND removal_clm_ok=0',
-    cm: 'pending_removal=1 AND removal_clm_ok=1 AND removal_cm_ok=0',
-    marketing: 'pending_removal=1 AND removal_cm_ok=1 AND removal_mkt_ok=0',
-    admin: 'pending_removal=1 AND removal_mkt_ok=1',
-  };
-  const addCond = addCondByStage[stage];
-  const remCond = remCondByStage[stage];
-  const cc = req.user.role === 'clm' ? ' AND country = ?' : '';       // CLM scoped to their country
-  const p = req.user.role === 'clm' ? [req.user.country] : [];
+  // Own stage plus any vacant lower stage this user now covers (escalation), country-aware.
+  const add = verifyPendingCondition(req.user, ADD_FLAG);
+  const rem = verifyPendingCondition(req.user, REM_FLAG);
   res.json({
     stage,
     adds: {
-      hcps: await q.all(`SELECT * FROM hcps WHERE ${addCond} AND active=1${cc}`, p),
-      chemists: await q.all(`SELECT * FROM chemists WHERE ${addCond} AND active=1${cc}`, p),
+      hcps: await q.all(`SELECT * FROM hcps WHERE ${add.sql} AND active=1`, add.params),
+      chemists: await q.all(`SELECT * FROM chemists WHERE ${add.sql} AND active=1`, add.params),
     },
     removals: {
-      hcps: await q.all(`SELECT * FROM hcps WHERE ${remCond} AND active=1${cc}`, p),
-      chemists: await q.all(`SELECT * FROM chemists WHERE ${remCond} AND active=1${cc}`, p),
+      hcps: await q.all(`SELECT * FROM hcps WHERE ${rem.sql} AND active=1`, rem.params),
+      chemists: await q.all(`SELECT * FROM chemists WHERE ${rem.sql} AND active=1`, rem.params),
     },
   });
 }));
@@ -390,7 +377,7 @@ router.post('/verification/decide', ah(async (req, res) => {
   const hasNote = note && String(note).trim();
 
   if (action === 'approve') {
-    if (!canActAtStage(req.user, curStage, rec.country)) {
+    if (!(await canActResolved(q, req.user, CHAINS.verify, curStage, rec.country))) {
       return res.status(403).json({ error: `Awaiting ${STAGE_LABEL[curStage] || curStage} approval` });
     }
     if (isRemoval) {
@@ -429,7 +416,7 @@ router.post('/verification/decide', ah(async (req, res) => {
   }
 
   if (action === 'merge') {
-    if (!canActAtStage(req.user, curStage, rec.country)) return res.status(403).json({ error: `Awaiting ${STAGE_LABEL[curStage] || curStage} approval` });
+    if (!(await canActResolved(q, req.user, CHAINS.verify, curStage, rec.country))) return res.status(403).json({ error: `Awaiting ${STAGE_LABEL[curStage] || curStage} approval` });
     const target = await q.get(`SELECT * FROM ${table} WHERE id = ?`, [mergeTargetId]);
     if (!target) return res.status(404).json({ error: 'Merge target not found' });
     const col = type === 'hcp' ? 'hcp_id' : 'chemist_id';

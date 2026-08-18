@@ -2,7 +2,7 @@ const express = require('express');
 const { q } = require('../db/connection');
 const { requireRole } = require('../middleware/auth');
 const { audit, notify, notifyHO, notifyStage } = require('../middleware/audit');
-const { CHAINS, nextStage, canActAtStage, stageForUser, STAGE_LABEL } = require('../services/approvals');
+const { CHAINS, nextStage, canActResolved, pendingCondition, STAGE_LABEL } = require('../services/approvals');
 
 const router = express.Router();
 const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -54,12 +54,12 @@ router.get('/', ah(async (req, res) => {
   if (req.query.type) { conds.push('a.type_id = ?'); params.push(req.query.type); }
   if (req.query.brand) { conds.push('a.brand_id = ?'); params.push(req.query.brand); }
   if (req.query.repId && (req.user.role === 'ho' || req.user.role === 'cm')) { conds.push('a.proposed_by = ?'); params.push(req.query.repId); }
-  // Approvals queue: activities currently awaiting THIS user's stage.
+  // Approvals queue: activities currently awaiting THIS user — their own stage plus any
+  // vacant lower stage they now cover (see approvals.js escalation rules).
   if (req.query.pending === 'mine') {
-    const stage = stageForUser(req.user);
     conds.push('a.status = ?'); params.push('submitted');
-    conds.push('a.approval_stage = ?'); params.push(stage || 'none');
-    if (req.user.role === 'clm') { conds.push('a.country = ?'); params.push(req.user.country); }
+    const pend = pendingCondition(req.user, CHAINS.activity, { stage: 'a.approval_stage', country: 'a.country' });
+    conds.push(pend.sql); params.push(...pend.params);
   }
   if (req.query.from) { conds.push('COALESCE(a.actual_date, a.planned_date) >= ?'); params.push(req.query.from); }
   if (req.query.to) { conds.push('COALESCE(a.actual_date, a.planned_date) <= ?'); params.push(req.query.to); }
@@ -78,7 +78,11 @@ router.get('/', ah(async (req, res) => {
 router.get('/:id', ah(async (req, res) => {
   const { act, error } = await scopedActivity(req, req.params.id);
   if (error) return res.status(error[0]).json({ error: error[1] });
-  res.json(await fullActivity(act.id));
+  const full = await fullActivity(act.id);
+  // Tell the UI whether THIS viewer may decide it right now (own stage or an escalated vacancy).
+  full.can_decide = full.status === 'submitted'
+    && await canActResolved(q, req.user, CHAINS.activity, full.approval_stage || 'clm', full.country);
+  res.json(full);
 }));
 
 // ---------- create / edit / submit (sales) ----------
@@ -149,7 +153,7 @@ router.post('/:id/decision', ah(async (req, res) => {
   if (!act) return res.status(404).json({ error: 'Activity not found' });
   if (act.status !== 'submitted') return res.status(409).json({ error: 'Only submitted activities can be decided' });
   const stage = act.approval_stage || 'clm';
-  if (!canActAtStage(req.user, stage, act.country)) {
+  if (!(await canActResolved(q, req.user, CHAINS.activity, stage, act.country))) {
     return res.status(403).json({ error: `This proposal is awaiting ${STAGE_LABEL[stage] || stage} approval` });
   }
   const { decision, remarks } = req.body || {};

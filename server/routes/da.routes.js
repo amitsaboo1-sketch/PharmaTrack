@@ -2,7 +2,7 @@ const express = require('express');
 const { q } = require('../db/connection');
 const { requireRole } = require('../middleware/auth');
 const { audit, notify, notifyStage } = require('../middleware/audit');
-const { CHAINS, nextStage, canActAtStage, stageForUser, STAGE_LABEL } = require('../services/approvals');
+const { CHAINS, nextStage, canActResolved, pendingCondition, STAGE_LABEL } = require('../services/approvals');
 
 const router = express.Router();
 const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -25,10 +25,9 @@ router.get('/', ah(async (req, res) => {
   else if (req.query.userId) { conds.push('d.user_id = ?'); params.push(req.query.userId); }
   if (req.query.status) { conds.push('d.status = ?'); params.push(req.query.status); }
   if (req.query.pending === 'mine') {
-    const stage = stageForUser(req.user);
     conds.push('d.status = ?'); params.push('submitted');
-    conds.push('d.approval_stage = ?'); params.push(stage || 'none');
-    if (req.user.role === 'clm') { conds.push('d.country_code = ?'); params.push(req.user.country); }
+    const pend = pendingCondition(req.user, CHAINS.da, { stage: 'd.approval_stage', country: 'd.country_code' });
+    conds.push(pend.sql); params.push(...pend.params);
   }
   const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
   res.json(await q.all(
@@ -57,6 +56,8 @@ router.get('/:id', ah(async (req, res) => {
   if (!d) return res.status(404).json({ error: 'Claim not found' });
   if (req.user.role === 'sales' && d.user_id !== req.user.id) return res.status(403).json({ error: 'Not your claim' });
   d.attachments = await q.all('SELECT id, category, amount, filename, mime, data_url, uploaded_at FROM da_attachments WHERE da_id = ?', [req.params.id]);
+  d.can_decide = d.status === 'submitted'
+    && await canActResolved(q, req.user, CHAINS.da, d.approval_stage || 'clm', d.country_code);
   res.json(d);
 }));
 
@@ -98,7 +99,7 @@ router.post('/:id/decision', ah(async (req, res) => {
   if (!d) return res.status(404).json({ error: 'Claim not found' });
   if (d.status !== 'submitted') return res.status(409).json({ error: 'Only submitted claims can be decided' });
   const stage = d.approval_stage || 'clm';
-  if (!canActAtStage(req.user, stage, d.country_code)) {
+  if (!(await canActResolved(q, req.user, CHAINS.da, stage, d.country_code))) {
     return res.status(403).json({ error: `This claim is awaiting ${STAGE_LABEL[stage] || stage} approval` });
   }
   const { decision, remarks } = req.body || {};
