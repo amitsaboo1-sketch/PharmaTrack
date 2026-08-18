@@ -3,7 +3,8 @@ import { h, kpiCard, table, badge, fmtMoney, fmtUnits, fmtPct, fmtDate, chartCan
 
 export default async function dashboardPage(root) {
   const user = session.user;
-  if (user.role === 'ho') return executive(root);
+  // CM sees the all-country executive view; CLM (and SER) see the country view scoped to them.
+  if (user.role === 'ho' || user.role === 'cm') return executive(root);
   return salesDash(root);
 }
 

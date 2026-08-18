@@ -3,7 +3,7 @@
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('sales','ho')), sub_role TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('sales','ho','clm','cm')), sub_role TEXT NOT NULL,
   territory TEXT, region TEXT, country TEXT, manager_id TEXT, active INTEGER DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS hcps (
@@ -11,13 +11,15 @@ CREATE TABLE IF NOT EXISTS hcps (
   city TEXT, territory TEXT, rep_id TEXT, class TEXT DEFAULT 'Ruby', category TEXT DEFAULT 'B',
   potential_score INTEGER DEFAULT 5, registration_no TEXT, contact TEXT, country TEXT,
   verified INTEGER DEFAULT 1, mkt_verified INTEGER DEFAULT 0, active INTEGER DEFAULT 1, created_by TEXT, created_at TEXT,
-  add_reason TEXT, mkt_note TEXT, pending_removal INTEGER DEFAULT 0, removal_reason TEXT, removal_mkt_note TEXT, removal_mkt_ok INTEGER DEFAULT 0
+  add_reason TEXT, mkt_note TEXT, pending_removal INTEGER DEFAULT 0, removal_reason TEXT, removal_mkt_note TEXT, removal_mkt_ok INTEGER DEFAULT 0,
+  clm_ok INTEGER DEFAULT 0, cm_ok INTEGER DEFAULT 0, removal_clm_ok INTEGER DEFAULT 0, removal_cm_ok INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS chemists (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, address TEXT, city TEXT, rep_id TEXT,
   is_hospital_in_house INTEGER DEFAULT 0, type TEXT DEFAULT 'Retail', country TEXT,
   verified INTEGER DEFAULT 1, mkt_verified INTEGER DEFAULT 0, active INTEGER DEFAULT 1,
-  add_reason TEXT, mkt_note TEXT, pending_removal INTEGER DEFAULT 0, removal_reason TEXT, removal_mkt_note TEXT, removal_mkt_ok INTEGER DEFAULT 0
+  add_reason TEXT, mkt_note TEXT, pending_removal INTEGER DEFAULT 0, removal_reason TEXT, removal_mkt_note TEXT, removal_mkt_ok INTEGER DEFAULT 0,
+  clm_ok INTEGER DEFAULT 0, cm_ok INTEGER DEFAULT 0, removal_clm_ok INTEGER DEFAULT 0, removal_cm_ok INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS hcp_chemist_map (
   hcp_id TEXT NOT NULL, chemist_id TEXT NOT NULL, weight REAL DEFAULT 1.0, PRIMARY KEY (hcp_id, chemist_id)
@@ -42,7 +44,8 @@ CREATE TABLE IF NOT EXISTS activities (
   estimated_cost REAL DEFAULT 0, expected_hcp_count INTEGER DEFAULT 0, expected_sales REAL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','submitted','approved','returned','rejected','executed','closed')),
   decided_by TEXT, decided_at TEXT, decision_remarks TEXT, actual_date TEXT, actual_venue TEXT,
-  actual_cost REAL, completion_remarks TEXT, created_at TEXT, updated_at TEXT
+  actual_cost REAL, completion_remarks TEXT, created_at TEXT, updated_at TEXT,
+  approval_stage TEXT, country TEXT
 );
 CREATE TABLE IF NOT EXISTS activity_participants (
   activity_id TEXT NOT NULL, account_id TEXT NOT NULL,
@@ -105,7 +108,7 @@ CREATE TABLE IF NOT EXISTS daily_allowances (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, country_code TEXT, currency_code TEXT,
   da_date TEXT NOT NULL, location TEXT, purpose TEXT, da_amount REAL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('draft','submitted','approved','rejected')),
-  remarks TEXT, decided_by TEXT, decided_at TEXT, created_at TEXT NOT NULL
+  remarks TEXT, decided_by TEXT, decided_at TEXT, created_at TEXT NOT NULL, approval_stage TEXT
 );
 CREATE TABLE IF NOT EXISTS da_attachments (
   id INTEGER PRIMARY KEY AUTOINCREMENT, da_id INTEGER NOT NULL, category TEXT, amount REAL DEFAULT 0,

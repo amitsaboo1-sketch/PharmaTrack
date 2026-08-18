@@ -1,7 +1,8 @@
 const express = require('express');
 const { q } = require('../db/connection');
-const { requireRole, requireMarketing } = require('../middleware/auth');
-const { audit, notify, notifyHO } = require('../middleware/audit');
+const { requireRole } = require('../middleware/auth');
+const { audit, notify, notifyHO, notifyStage } = require('../middleware/audit');
+const { CHAINS, nextStage, canActAtStage, stageForUser, STAGE_LABEL } = require('../services/approvals');
 
 const router = express.Router();
 const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -47,10 +48,19 @@ router.get('/', ah(async (req, res) => {
   const params = [];
   const conds = [];
   if (req.user.role === 'sales') { conds.push('a.proposed_by = ?'); params.push(req.user.id); }
+  else if (req.user.role === 'clm') { conds.push('a.country = ?'); params.push(req.user.country); }
+  // cm / ho see all countries
   if (req.query.status) { conds.push('a.status = ?'); params.push(req.query.status); }
   if (req.query.type) { conds.push('a.type_id = ?'); params.push(req.query.type); }
   if (req.query.brand) { conds.push('a.brand_id = ?'); params.push(req.query.brand); }
-  if (req.query.repId && req.user.role === 'ho') { conds.push('a.proposed_by = ?'); params.push(req.query.repId); }
+  if (req.query.repId && (req.user.role === 'ho' || req.user.role === 'cm')) { conds.push('a.proposed_by = ?'); params.push(req.query.repId); }
+  // Approvals queue: activities currently awaiting THIS user's stage.
+  if (req.query.pending === 'mine') {
+    const stage = stageForUser(req.user);
+    conds.push('a.status = ?'); params.push('submitted');
+    conds.push('a.approval_stage = ?'); params.push(stage || 'none');
+    if (req.user.role === 'clm') { conds.push('a.country = ?'); params.push(req.user.country); }
+  }
   if (req.query.from) { conds.push('COALESCE(a.actual_date, a.planned_date) >= ?'); params.push(req.query.from); }
   if (req.query.to) { conds.push('COALESCE(a.actual_date, a.planned_date) <= ?'); params.push(req.query.to); }
   const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
@@ -89,17 +99,18 @@ router.post('/', requireRole('sales'), ah(async (req, res) => {
   if (!b.title || !b.typeId) return res.status(400).json({ error: 'title and typeId are required' });
   const id = await newActivityId();
   const status = b.submit ? 'submitted' : 'draft';
+  const stage = status === 'submitted' ? 'clm' : null;
   await q.run(
-    `INSERT INTO activities (id,title,objective,remarks,type_id,brand_id,product_id,proposed_by,territory,
-        planned_date,venue,estimated_cost,expected_hcp_count,expected_sales,status,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO activities (id,title,objective,remarks,type_id,brand_id,product_id,proposed_by,territory,country,
+        planned_date,venue,estimated_cost,expected_hcp_count,expected_sales,status,approval_stage,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, b.title, b.objective || '', b.remarks || '', b.typeId, b.brandId || null, b.productId || null,
-     req.user.id, req.user.territory, b.plannedDate || null, b.venue || '',
-     Number(b.estimatedCost) || 0, Number(b.expectedHcpCount) || 0, Number(b.expectedSales) || 0, status, now(), now()]
+     req.user.id, req.user.territory, req.user.country, b.plannedDate || null, b.venue || '',
+     Number(b.estimatedCost) || 0, Number(b.expectedHcpCount) || 0, Number(b.expectedSales) || 0, status, stage, now(), now()]
   );
   await upsertParticipants(q, id, b.targets);
   await audit(req, 'activity.create', 'activity', id, null, { ...b, status });
-  if (status === 'submitted') await notifyHO('submitted', `${req.user.name} submitted "${b.title}" for approval`, 'activity', id);
+  if (status === 'submitted') await notifyStage('clm', req.user.country, `${req.user.name} submitted "${b.title}" — awaiting your approval`, 'activity', id);
   res.json({ id, status });
 }));
 
@@ -126,25 +137,48 @@ router.post('/:id/submit', requireRole('sales'), ah(async (req, res) => {
   const { act, error } = await scopedActivity(req, req.params.id);
   if (error) return res.status(error[0]).json({ error: error[1] });
   if (!['draft', 'returned'].includes(act.status)) return res.status(409).json({ error: `Cannot submit a ${act.status} activity` });
-  await q.run(`UPDATE activities SET status='submitted', updated_at=? WHERE id=?`, [now(), act.id]);
+  await q.run(`UPDATE activities SET status='submitted', approval_stage='clm', country=?, updated_at=? WHERE id=?`, [req.user.country, now(), act.id]);
   await audit(req, 'activity.submit', 'activity', act.id, { status: act.status }, { status: 'submitted' });
-  await notifyHO('submitted', `${req.user.name} submitted "${act.title}" for approval`, 'activity', act.id);
+  await notifyStage('clm', req.user.country, `${req.user.name} submitted "${act.title}" — awaiting your approval`, 'activity', act.id);
   res.json({ ok: true });
 }));
 
-// ---------- Marketing decision (approve / reject / return) ----------
-router.post('/:id/decision', requireMarketing, ah(async (req, res) => {
+// ---------- Sequential decision: CLM (country) -> CM -> Marketing ----------
+router.post('/:id/decision', ah(async (req, res) => {
   const act = await q.get('SELECT * FROM activities WHERE id = ?', [req.params.id]);
   if (!act) return res.status(404).json({ error: 'Activity not found' });
   if (act.status !== 'submitted') return res.status(409).json({ error: 'Only submitted activities can be decided' });
+  const stage = act.approval_stage || 'clm';
+  if (!canActAtStage(req.user, stage, act.country)) {
+    return res.status(403).json({ error: `This proposal is awaiting ${STAGE_LABEL[stage] || stage} approval` });
+  }
   const { decision, remarks } = req.body || {};
   if (!['approved', 'rejected', 'returned'].includes(decision)) return res.status(400).json({ error: 'decision must be approved|rejected|returned' });
   if (['rejected', 'returned'].includes(decision) && !remarks) return res.status(400).json({ error: 'Remarks are mandatory when rejecting or returning' });
-  await q.run(`UPDATE activities SET status=?, decided_by=?, decided_at=?, decision_remarks=?, updated_at=? WHERE id=?`,
+
+  if (decision === 'approved') {
+    const next = nextStage(CHAINS.activity, stage);
+    if (next) {
+      await q.run(`UPDATE activities SET approval_stage=?, decided_by=?, decided_at=?, decision_remarks=?, updated_at=? WHERE id=?`,
+        [next, req.user.id, now(), remarks || '', now(), act.id]);
+      await audit(req, `activity.approve_${stage}`, 'activity', act.id, { stage }, { stage: next });
+      await notifyStage(next, act.country, `"${act.title}" cleared ${STAGE_LABEL[stage]} — awaiting your approval`, 'activity', act.id);
+      await notify(act.proposed_by, 'approval', `"${act.title}" cleared ${STAGE_LABEL[stage]} — now with ${STAGE_LABEL[next]}`, 'activity', act.id);
+      return res.json({ ok: true, stage: next });
+    }
+    await q.run(`UPDATE activities SET status='approved', approval_stage=NULL, decided_by=?, decided_at=?, decision_remarks=?, updated_at=? WHERE id=?`,
+      [req.user.id, now(), remarks || '', now(), act.id]);
+    await audit(req, 'activity.approved', 'activity', act.id, { stage }, { status: 'approved' });
+    await notify(act.proposed_by, 'approved', `Your proposal "${act.title}" was fully approved — you can now execute it`, 'activity', act.id);
+    return res.json({ ok: true, stage: 'approved' });
+  }
+
+  // return / reject -> back to the SER
+  await q.run(`UPDATE activities SET status=?, approval_stage=NULL, decided_by=?, decided_at=?, decision_remarks=?, updated_at=? WHERE id=?`,
     [decision, req.user.id, now(), remarks || '', now(), act.id]);
-  await audit(req, `activity.${decision}`, 'activity', act.id, { status: act.status }, { status: decision, remarks });
-  await notify(act.proposed_by, decision, `Your proposal "${act.title}" was ${decision}${remarks ? ': ' + remarks : ''}`, 'activity', act.id);
-  res.json({ ok: true });
+  await audit(req, `activity.${decision}`, 'activity', act.id, { stage }, { status: decision, remarks });
+  await notify(act.proposed_by, decision, `Your proposal "${act.title}" was ${decision} by ${STAGE_LABEL[stage]}${remarks ? ': ' + remarks : ''}`, 'activity', act.id);
+  res.json({ ok: true, stage: decision });
 }));
 
 // ---------- execution (sales owner) ----------

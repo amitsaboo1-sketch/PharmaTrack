@@ -90,14 +90,21 @@ export default async function activityDetailPage(root, id) {
   const user = session.user;
   const a = await api(`/activities/${id}`);
   const isOwner = user.role === 'sales' && a.proposed_by === user.id;
-  const isMarketing = user.role === 'ho' && ['Product Manager', 'Marketing Head'].includes(user.sub_role);
+  const STAGE_LABEL = { clm: 'Cluster Lead (CLM)', cm: 'Country Manager (CM)', marketing: 'Marketing' };
+  // Sequential approval: the buttons appear only for the approver whose turn it is.
+  const canDecide = a.status === 'submitted' && (
+    (a.approval_stage === 'clm' && user.role === 'clm' && user.country === a.country) ||
+    (a.approval_stage === 'cm' && user.role === 'cm') ||
+    (a.approval_stage === 'marketing' && user.role === 'ho' && ['Product Manager', 'Marketing Head'].includes(user.sub_role))
+  );
 
   const head = h('div', { class: 'page-head' },
     h('button', { class: 'btn sm', onclick: () => (location.hash = '#/activities') }, '← Back'),
     h('h2', { style: 'font-size:18px;' }, a.title), badge(a.status),
+    a.status === 'submitted' && a.approval_stage ? h('span', { class: 'hint' }, `Awaiting ${STAGE_LABEL[a.approval_stage] || a.approval_stage}`) : null,
     h('div', { class: 'spacer' }));
 
-  if (isMarketing && a.status === 'submitted') {
+  if (canDecide) {
     head.append(
       h('button', { class: 'btn success', onclick: () => decide('approved') }, 'Approve'),
       h('button', { class: 'btn', onclick: () => decide('returned') }, 'Return'),

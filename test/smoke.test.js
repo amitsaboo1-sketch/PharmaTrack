@@ -71,11 +71,36 @@ test('critical path', async () => {
   assert.equal(proposal.status, 200);
   const actId = proposal.data.id;
 
-  // 4. login HO and approve
+  // 4. Sequential sign-off: SER → CLM (Kenya) → CM → Marketing
+  const clmLogin = await call('/auth/login', { method: 'POST', body: { email: 'clm.kenya@pharmatrack.demo', password: 'demo123' } });
+  assert.equal(clmLogin.status, 200);
+  const clm = clmLogin.data.token;
+  const cmLogin = await call('/auth/login', { method: 'POST', body: { email: 'cm@pharmatrack.demo', password: 'demo123' } });
+  assert.equal(cmLogin.status, 200);
+  const cm = cmLogin.data.token;
   const hoLogin = await call('/auth/login', { method: 'POST', body: { email: 'amit@pharmatrack.demo', password: 'demo123' } });
   const ho = hoLogin.data.token;
+
+  // Out-of-turn approval is blocked: Marketing cannot approve while it is still at the CLM stage
+  const early = await call(`/activities/${actId}/decision`, { method: 'POST', token: ho, body: { decision: 'approved', remarks: 'ok' } });
+  assert.equal(early.status, 403);
+  // A CLM from a different country cannot approve this Kenya proposal
+  const clmUgLogin = await call('/auth/login', { method: 'POST', body: { email: 'clm.uganda@pharmatrack.demo', password: 'demo123' } });
+  const clmUg = clmUgLogin.data.token;
+  const wrongClm = await call(`/activities/${actId}/decision`, { method: 'POST', token: clmUg, body: { decision: 'approved' } });
+  assert.equal(wrongClm.status, 403);
+  // CLM (Kenya) signs off → advances to CM
+  const dClm = await call(`/activities/${actId}/decision`, { method: 'POST', token: clm, body: { decision: 'approved', remarks: 'clm ok' } });
+  assert.equal(dClm.status, 200);
+  assert.equal(dClm.data.stage, 'cm');
+  // CM signs off → advances to Marketing
+  const dCm = await call(`/activities/${actId}/decision`, { method: 'POST', token: cm, body: { decision: 'approved', remarks: 'cm ok' } });
+  assert.equal(dCm.status, 200);
+  assert.equal(dCm.data.stage, 'marketing');
+  // Marketing gives the final approval
   const decision = await call(`/activities/${actId}/decision`, { method: 'POST', token: ho, body: { decision: 'approved', remarks: 'ok' } });
   assert.equal(decision.status, 200);
+  assert.equal(decision.data.stage, 'approved');
 
   // HO cannot execute (sales-only)
   const hoExec = await call(`/activities/${actId}/execute`, { method: 'POST', token: ho, body: {} });
@@ -227,20 +252,31 @@ test('critical path', async () => {
   const dl = await call('/reports/sales.csv', { token: rep });
   assert.equal(dl.status, 403);
 
-  // 10. daily allowance: rep creates a claim; only Admin (Operations) can approve
+  // 10. daily allowance: rep creates a claim; routes SER → CLM → CM → Admin
   const daCreate = await call('/da', {
     method: 'POST', token: rep,
     body: { daDate: '2026-06-26', location: 'Nairobi', purpose: 'calls', daAmount: 3000,
             attachments: [{ category: 'Fuel', amount: 1500, filename: 'r.jpg' }] },
   });
   assert.equal(daCreate.status, 200);
-  // Marketing/PM cannot approve DA
-  const daByMarketing = await call(`/da/${daCreate.data.id}/decision`, { method: 'POST', token: ho, body: { decision: 'approved' } });
-  assert.equal(daByMarketing.status, 403);
+  const daId = daCreate.data.id;
   const adminLogin = await call('/auth/login', { method: 'POST', body: { email: 'admin@pharmatrack.demo', password: 'demo123' } });
   const admin = adminLogin.data.token;
-  const daDecision = await call(`/da/${daCreate.data.id}/decision`, { method: 'POST', token: admin, body: { decision: 'approved' } });
+  // Neither Marketing nor Admin can approve out of turn while it is still at the CLM stage
+  const daByMarketing = await call(`/da/${daId}/decision`, { method: 'POST', token: ho, body: { decision: 'approved' } });
+  assert.equal(daByMarketing.status, 403);
+  const daEarlyAdmin = await call(`/da/${daId}/decision`, { method: 'POST', token: admin, body: { decision: 'approved' } });
+  assert.equal(daEarlyAdmin.status, 403);
+  // CLM (Kenya) → CM → Admin
+  const daClm = await call(`/da/${daId}/decision`, { method: 'POST', token: clm, body: { decision: 'approved' } });
+  assert.equal(daClm.status, 200);
+  assert.equal(daClm.data.stage, 'cm');
+  const daCm = await call(`/da/${daId}/decision`, { method: 'POST', token: cm, body: { decision: 'approved' } });
+  assert.equal(daCm.status, 200);
+  assert.equal(daCm.data.stage, 'admin');
+  const daDecision = await call(`/da/${daId}/decision`, { method: 'POST', token: admin, body: { decision: 'approved' } });
   assert.equal(daDecision.status, 200);
+  assert.equal(daDecision.data.stage, 'approved');
 
   // 11. rollback batch
   const rb = await call(`/sales/batches/${commit.data.batchId}/rollback`, { method: 'POST', token: ho, body: {} });

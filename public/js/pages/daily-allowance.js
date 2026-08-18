@@ -1,9 +1,19 @@
 import { api, session } from '../api.js';
 import { h, table, badge, fmtMoney, fmtDate, modal, field, select, toast } from '../ui.js';
 
+const STAGE_LABEL = { clm: 'Cluster Lead (CLM)', cm: 'Country Manager (CM)', admin: 'Admin (Operations)' };
+
+// Can this user act on a DA claim currently sitting at `stage`?
+function canDecideDA(user, stage, countryCode) {
+  if (stage === 'clm') return user.role === 'clm' && user.country === countryCode;
+  if (stage === 'cm') return user.role === 'cm';
+  if (stage === 'admin') return user.role === 'ho' && user.sub_role === 'Admin';
+  return false;
+}
+
 export default async function dailyAllowancePage(root) {
   const user = session.user;
-  if (user.role === 'ho') return hoView(root);
+  if (user.role === 'ho' || user.role === 'clm' || user.role === 'cm') return approvalView(root, user);
   return repView(root, user);
 }
 
@@ -13,7 +23,7 @@ async function repView(root, user) {
   const listBox = h('div');
 
   root.append(h('div', { class: 'page-head' },
-    h('div', { class: 'hint' }, 'Log your daily allowance and attach expense proofs. Amounts are in your country currency; claims go to Operations (Admin) for approval.'),
+    h('div', { class: 'hint' }, 'Log your daily allowance and attach expense proofs. Amounts are in your country currency; claims route to your Cluster Lead (CLM) → Country Manager (CM) → Admin for approval.'),
     h('div', { class: 'spacer' }),
     h('button', { class: 'btn primary', onclick: () => newClaimModal(categories, load) }, '+ New DA Claim')),
     listBox);
@@ -116,23 +126,28 @@ async function repView(root, user) {
   await load();
 }
 
-// ---------------- HO view: review & approve (approval is Admin/Operations only) ----------------
-async function hoView(root) {
-  const isAdmin = session.user.role === 'ho' && session.user.sub_role === 'Admin';
-  const filterSel = select([['submitted', 'Pending'], ['', 'All'], ['approved', 'Approved'], ['rejected', 'Rejected']],
+// -------- Approver view: sequential CLM (country) → CM → Admin sign-off --------
+async function approvalView(root, user) {
+  const myStage = user.role === 'clm' ? 'clm' : user.role === 'cm' ? 'cm'
+    : (user.sub_role === 'Admin' ? 'admin' : null); // other HO roles: read-only
+  const filterSel = select([['submitted', 'Pending my approval'], ['', 'All'], ['approved', 'Approved'], ['rejected', 'Rejected']],
     { onchange: (e) => load(e.target.value) });
   const listBox = h('div');
-  root.append(h('div', { class: 'page-head' }, h('div', { class: 'filters' }, filterSel), h('div', { class: 'spacer' })), listBox);
+  const chainHint = h('div', { class: 'hint' },
+    'Claims route SER → Cluster Lead (CLM) → Country Manager (CM) → Admin. Each level signs off in turn.');
+  root.append(h('div', { class: 'page-head' }, h('div', { class: 'filters' }, filterSel), h('div', { class: 'spacer' }), chainHint), listBox);
 
   async function load(status = 'submitted') {
-    const claims = await api(`/da${status ? '?status=' + status : ''}`);
+    // "Pending my approval" shows only claims currently at my stage; other filters show the wider list.
+    const claims = await api(status === 'submitted' ? '/da?pending=mine' : `/da${status ? '?status=' + status : ''}`);
     listBox.innerHTML = '';
     listBox.append(h('div', { class: 'card' },
-      table(['Rep', 'Date', 'Location', 'Purpose', 'DA Amount', 'Proofs', 'Status', ''],
+      table(['Rep', 'Date', 'Location', 'Purpose', 'DA Amount', 'Proofs', 'Stage', 'Status', ''],
         claims.map((c) => [
           c.user_name, fmtDate(c.da_date), c.location || '—', c.purpose || '—',
           fmtMoney(c.da_amount, c.currency_code),
           `${c.attachment_count} · ${fmtMoney(c.expense_total, c.currency_code)}`,
+          c.status === 'submitted' ? (STAGE_LABEL[c.approval_stage] || '—') : '—',
           badge(c.status === 'submitted' ? 'submitted' : c.status),
           h('button', { class: 'btn sm primary', onclick: () => review(c.id) }, 'Review'),
         ]))));
@@ -140,21 +155,24 @@ async function hoView(root) {
 
   async function review(id) {
     const c = await api(`/da/${id}`);
+    const canDecide = c.status === 'submitted' && canDecideDA(user, c.approval_stage, c.country_code);
     const remarks = h('textarea', { rows: 2, placeholder: 'Remarks (required to reject)' });
     modal(`Review DA — ${c.user_name} · ${fmtDate(c.da_date)}`, [
       infoRow('Location', c.location || '—'),
       infoRow('Purpose', c.purpose || '—'),
       infoRow('DA amount', fmtMoney(c.da_amount, c.currency_code)),
+      c.status === 'submitted' ? infoRow('Awaiting', STAGE_LABEL[c.approval_stage] || c.approval_stage) : null,
       h('h3', { style: 'margin:14px 0 8px;' }, 'Expense proofs'),
       c.attachments.length
         ? table(['Category', 'Amount', 'File'], c.attachments.map((a) => [a.category, fmtMoney(a.amount, c.currency_code), attachmentLink(a)]))
         : h('div', { class: 'empty' }, 'No attachments'),
-      c.status === 'submitted' && isAdmin ? field('Remarks', remarks) : infoRow('Decision', `${c.status}${c.remarks ? ' — ' + c.remarks : ''}`),
-    ], (close) => c.status === 'submitted' && isAdmin
+      canDecide ? field('Remarks', remarks) : infoRow('Decision', `${c.status}${c.remarks ? ' — ' + c.remarks : ''}`),
+    ], (close) => canDecide
       ? [
           h('button', { class: 'btn', onclick: close }, 'Cancel'),
           h('button', { class: 'btn danger', onclick: () => decide(c.id, 'rejected', remarks.value, close) }, 'Reject'),
-          h('button', { class: 'btn success', onclick: () => decide(c.id, 'approved', remarks.value, close) }, 'Approve'),
+          h('button', { class: 'btn success', onclick: () => decide(c.id, 'approved', remarks.value, close) },
+            c.approval_stage === 'admin' ? 'Approve (final)' : 'Approve & forward'),
         ]
       : [h('button', { class: 'btn primary', onclick: close }, 'Close')]);
   }
@@ -166,6 +184,7 @@ async function hoView(root) {
     } catch { /* toast shown */ }
   }
 
+  if (!myStage) chainHint.textContent = 'Read-only: daily-allowance approvals are handled by CLM, CM and Admin.';
   await load('submitted');
 }
 

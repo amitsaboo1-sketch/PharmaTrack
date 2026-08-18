@@ -50,9 +50,17 @@ function requireMarketing(req, res, next) {
   return res.status(403).json({ error: 'Only Marketing can approve or reject activities' });
 }
 
+// Field management line: SER (sales) -> CLM (cluster lead, per country) -> CM (country manager, all).
+function isCLM(user) { return !!user && user.role === 'clm'; }
+function isCM(user) { return !!user && user.role === 'cm'; }
+function isAdminUser(user) { return !!user && user.role === 'ho' && user.sub_role === 'Admin'; }
+
 // True when the user may see rows belonging to repId.
 function canSeeRep(user, repId) {
-  return user.role === 'ho' || user.id === repId;
+  return user.role === 'ho' || user.role === 'cm' || user.role === 'clm' || user.id === repId;
 }
 
-module.exports = { requireAuth, requireRole, requireAdmin, requireMarketing, isMarketing, MARKETING_ROLES, canSeeRep };
+module.exports = {
+  requireAuth, requireRole, requireAdmin, requireMarketing, isMarketing, MARKETING_ROLES,
+  isCLM, isCM, isAdminUser, canSeeRep,
+};

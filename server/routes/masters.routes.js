@@ -1,8 +1,23 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { q } = require('../db/connection');
-const { requireRole, requireAdmin, isMarketing } = require('../middleware/auth');
-const { audit, notify, notifyHO } = require('../middleware/audit');
+const { requireRole, requireAdmin } = require('../middleware/auth');
+const { CHAINS, nextStage, canActAtStage, stageForUser, STAGE_LABEL } = require('../services/approvals');
+const { audit, notify, notifyStage } = require('../middleware/audit');
+
+// Current pending stage of a field account in the add / removal chains (clm -> cm -> marketing -> admin).
+function addStage(rec) {
+  if (!rec.clm_ok) return 'clm';
+  if (!rec.cm_ok) return 'cm';
+  if (!rec.mkt_verified) return 'marketing';
+  return 'admin';
+}
+function removalStage(rec) {
+  if (!rec.removal_clm_ok) return 'clm';
+  if (!rec.removal_cm_ok) return 'cm';
+  if (!rec.removal_mkt_ok) return 'marketing';
+  return 'admin';
+}
 const { doctorProfile, chemistProfile } = require('../services/roi');
 const mastersCsv = require('../services/mastersCsv');
 
@@ -323,81 +338,98 @@ router.post('/verification/request-removal', requireRole('sales'), ah(async (req
   if (!rec) return res.status(404).json({ error: 'Account not found' });
   if (rec.rep_id !== req.user.id) return res.status(403).json({ error: 'Not your account' });
   if (rec.pending_removal) return res.status(409).json({ error: 'Removal already requested' });
-  await q.run(`UPDATE ${table} SET pending_removal = 1, removal_reason = ?, removal_mkt_ok = 0, removal_mkt_note = NULL WHERE id = ?`, [String(reason).trim(), id]);
+  await q.run(`UPDATE ${table} SET pending_removal = 1, removal_reason = ?, removal_clm_ok = 0, removal_cm_ok = 0, removal_mkt_ok = 0, removal_mkt_note = NULL WHERE id = ?`, [String(reason).trim(), id]);
   await audit(req, `${type}.request_removal`, type, id, null, { reason: String(reason).trim() });
-  await notifyHO('removal_request', `${req.user.name} requested removal of ${rec.name} — awaiting Marketing review`, type, id);
+  await notifyStage('clm', rec.country, `${req.user.name} requested removal of ${rec.name} — awaiting your approval`, type, id);
   res.json({ ok: true });
 }));
 
-router.get('/verification/pending', requireRole('ho'), ah(async (req, res) => {
-  const marketing = isMarketing(req.user);
-  const admin = req.user.sub_role === 'Admin';
+router.get('/verification/pending', ah(async (req, res) => {
+  const stage = stageForUser(req.user);
   const empty = { stage: null, adds: { hcps: [], chemists: [] }, removals: { hcps: [], chemists: [] } };
-  if (!marketing && !admin) return res.json(empty);
-  // Two-stage flow. Adds: Marketing sees not-yet-approved, Admin sees marketing-approved.
-  const addCond = marketing ? 'mkt_verified = 0 AND verified = 0 AND pending_removal = 0' : 'mkt_verified = 1 AND verified = 0 AND pending_removal = 0';
-  const remCond = marketing ? 'pending_removal = 1 AND removal_mkt_ok = 0' : 'pending_removal = 1 AND removal_mkt_ok = 1';
+  if (!['clm', 'cm', 'marketing', 'admin'].includes(stage)) return res.json(empty);
+  const addCondByStage = {
+    clm: 'clm_ok=0 AND verified=0 AND pending_removal=0',
+    cm: 'clm_ok=1 AND cm_ok=0 AND verified=0 AND pending_removal=0',
+    marketing: 'cm_ok=1 AND mkt_verified=0 AND verified=0 AND pending_removal=0',
+    admin: 'mkt_verified=1 AND verified=0 AND pending_removal=0',
+  };
+  const remCondByStage = {
+    clm: 'pending_removal=1 AND removal_clm_ok=0',
+    cm: 'pending_removal=1 AND removal_clm_ok=1 AND removal_cm_ok=0',
+    marketing: 'pending_removal=1 AND removal_cm_ok=1 AND removal_mkt_ok=0',
+    admin: 'pending_removal=1 AND removal_mkt_ok=1',
+  };
+  const addCond = addCondByStage[stage];
+  const remCond = remCondByStage[stage];
+  const cc = req.user.role === 'clm' ? ' AND country = ?' : '';       // CLM scoped to their country
+  const p = req.user.role === 'clm' ? [req.user.country] : [];
   res.json({
-    stage: marketing ? 'marketing' : 'admin',
+    stage,
     adds: {
-      hcps: await q.all(`SELECT * FROM hcps WHERE ${addCond} AND active = 1`),
-      chemists: await q.all(`SELECT * FROM chemists WHERE ${addCond} AND active = 1`),
+      hcps: await q.all(`SELECT * FROM hcps WHERE ${addCond} AND active=1${cc}`, p),
+      chemists: await q.all(`SELECT * FROM chemists WHERE ${addCond} AND active=1${cc}`, p),
     },
     removals: {
-      hcps: await q.all(`SELECT * FROM hcps WHERE ${remCond} AND active = 1`),
-      chemists: await q.all(`SELECT * FROM chemists WHERE ${remCond} AND active = 1`),
+      hcps: await q.all(`SELECT * FROM hcps WHERE ${remCond} AND active=1${cc}`, p),
+      chemists: await q.all(`SELECT * FROM chemists WHERE ${remCond} AND active=1${cc}`, p),
     },
   });
 }));
 
-router.post('/verification/decide', requireRole('ho'), ah(async (req, res) => {
+router.post('/verification/decide', ah(async (req, res) => {
   const { type, id, action, mergeTargetId, note } = req.body || {};
   if (!['hcp', 'chemist'].includes(type)) return res.status(400).json({ error: 'type must be hcp|chemist' });
   const table = type === 'hcp' ? 'hcps' : 'chemists';
   const rec = await q.get(`SELECT * FROM ${table} WHERE id = ?`, [id]);
   if (!rec) return res.status(404).json({ error: 'Account not found' });
+  if (!stageForUser(req.user)) return res.status(403).json({ error: 'Only CLM, CM, Marketing or Admin can verify field accounts' });
 
-  const marketing = isMarketing(req.user);
-  const admin = req.user.sub_role === 'Admin';
-  if (!marketing && !admin) return res.status(403).json({ error: 'Only Marketing or Admin can verify field accounts' });
+  const isRemoval = !!rec.pending_removal;
+  const curStage = isRemoval ? removalStage(rec) : addStage(rec);
   const hasNote = note && String(note).trim();
 
   if (action === 'approve') {
-    // ----- Removal request -----
-    if (rec.pending_removal) {
-      if (marketing) {
-        if (rec.removal_mkt_ok) return res.status(409).json({ error: 'Removal already reviewed by Marketing' });
+    if (!canActAtStage(req.user, curStage, rec.country)) {
+      return res.status(403).json({ error: `Awaiting ${STAGE_LABEL[curStage] || curStage} approval` });
+    }
+    if (isRemoval) {
+      if (curStage === 'clm') await q.run(`UPDATE ${table} SET removal_clm_ok=1 WHERE id=?`, [id]);
+      else if (curStage === 'cm') await q.run(`UPDATE ${table} SET removal_cm_ok=1 WHERE id=?`, [id]);
+      else if (curStage === 'marketing') {
         if (!hasNote) return res.status(400).json({ error: 'Please add a comment before sending to Admin' });
-        await q.run(`UPDATE ${table} SET removal_mkt_ok = 1, removal_mkt_note = ? WHERE id = ?`, [String(note).trim(), id]);
-        await audit(req, `${type}.removal_marketing`, type, id, rec, { removal_mkt_note: String(note).trim() });
-        const admins = await q.all(`SELECT id FROM users WHERE role='ho' AND sub_role='Admin' AND active=1`);
-        for (const u of admins) await notify(u.id, 'verify', `Removal of ${rec.name} approved by Marketing — needs final approval`, type, id);
-        return res.json({ ok: true, stage: 'marketing', kind: 'removal' });
+        await q.run(`UPDATE ${table} SET removal_mkt_ok=1, removal_mkt_note=? WHERE id=?`, [String(note).trim(), id]);
+      } else {
+        await q.run(`UPDATE ${table} SET active=0, pending_removal=0 WHERE id=?`, [id]);
+        await audit(req, `${type}.removal_admin`, type, id, rec, { active: 0 });
+        if (rec.rep_id) await notify(rec.rep_id, 'removed', `${rec.name} was removed from the master list`, type, id);
+        return res.json({ ok: true, kind: 'removal', final: true });
       }
-      if (!rec.removal_mkt_ok) return res.status(409).json({ error: 'Marketing must review the removal first' });
-      await q.run(`UPDATE ${table} SET active = 0, pending_removal = 0 WHERE id = ?`, [id]);
-      await audit(req, `${type}.removal_admin`, type, id, rec, { active: 0 });
-      if (rec.rep_id) await notify(rec.rep_id, 'removed', `${rec.name} was removed from the master list`, type, id);
-      return res.json({ ok: true, stage: 'final', kind: 'removal' });
+      const next = nextStage(CHAINS.verify, curStage);
+      await audit(req, `${type}.removal_${curStage}`, type, id, rec, { advancedTo: next });
+      await notifyStage(next, rec.country, `Removal of ${rec.name} cleared ${STAGE_LABEL[curStage]} — awaiting your approval`, type, id);
+      return res.json({ ok: true, kind: 'removal', stage: curStage, next });
     }
     // ----- Addition -----
-    if (marketing) {
-      if (rec.mkt_verified) return res.status(409).json({ error: 'Already approved by Marketing — awaiting Admin' });
+    if (curStage === 'clm') await q.run(`UPDATE ${table} SET clm_ok=1 WHERE id=?`, [id]);
+    else if (curStage === 'cm') await q.run(`UPDATE ${table} SET cm_ok=1 WHERE id=?`, [id]);
+    else if (curStage === 'marketing') {
       if (!hasNote) return res.status(400).json({ error: 'Please add a comment before sending to Admin' });
-      await q.run(`UPDATE ${table} SET mkt_verified = 1, mkt_note = ? WHERE id = ?`, [String(note).trim(), id]);
-      await audit(req, `${type}.verify_marketing`, type, id, rec, { mkt_verified: 1, mkt_note: String(note).trim() });
-      const admins = await q.all(`SELECT id FROM users WHERE role='ho' AND sub_role='Admin' AND active=1`);
-      for (const u of admins) await notify(u.id, 'verify', `${rec.name} approved by Marketing — needs final verification`, type, id);
-      return res.json({ ok: true, stage: 'marketing', kind: 'add' });
+      await q.run(`UPDATE ${table} SET mkt_verified=1, mkt_note=? WHERE id=?`, [String(note).trim(), id]);
+    } else {
+      await q.run(`UPDATE ${table} SET verified=1 WHERE id=?`, [id]);
+      await audit(req, `${type}.verify_admin`, type, id, rec, { verified: 1 });
+      if (rec.rep_id || rec.created_by) await notify(rec.rep_id || rec.created_by, 'verified', `${rec.name} is now fully verified in the master list`, type, id);
+      return res.json({ ok: true, kind: 'add', final: true });
     }
-    if (!rec.mkt_verified) return res.status(409).json({ error: 'Marketing must approve first' });
-    await q.run(`UPDATE ${table} SET verified = 1 WHERE id = ?`, [id]);
-    await audit(req, `${type}.verify_admin`, type, id, rec, { verified: 1 });
-    if (rec.rep_id || rec.created_by) await notify(rec.rep_id || rec.created_by, 'verified', `${rec.name} is now fully verified in the master list`, type, id);
-    return res.json({ ok: true, stage: 'final', kind: 'add' });
+    const next = nextStage(CHAINS.verify, curStage);
+    await audit(req, `${type}.verify_${curStage}`, type, id, rec, { advancedTo: next });
+    await notifyStage(next, rec.country, `${rec.name} cleared ${STAGE_LABEL[curStage]} — awaiting your approval`, type, id);
+    return res.json({ ok: true, kind: 'add', stage: curStage, next });
   }
 
   if (action === 'merge') {
+    if (!canActAtStage(req.user, curStage, rec.country)) return res.status(403).json({ error: `Awaiting ${STAGE_LABEL[curStage] || curStage} approval` });
     const target = await q.get(`SELECT * FROM ${table} WHERE id = ?`, [mergeTargetId]);
     if (!target) return res.status(404).json({ error: 'Merge target not found' });
     const col = type === 'hcp' ? 'hcp_id' : 'chemist_id';

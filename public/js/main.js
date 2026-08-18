@@ -45,25 +45,25 @@ const routes = {
 
 const NAV = [
   { section: 'Overview' },
-  { route: 'dashboard', label: 'Dashboard', icon: '◧', roles: ['sales', 'ho'] },
+  { route: 'dashboard', label: 'Dashboard', icon: '◧', roles: ['sales', 'ho', 'clm', 'cm'] },
   { section: 'Field Operations' },
-  { route: 'activities', label: 'Activities', icon: '▤', roles: ['sales', 'ho'] },
-  { route: 'approvals', label: 'Approvals', icon: '✓', roles: ['marketing'], badge: 'pending' },
+  { route: 'activities', label: 'Activities', icon: '▤', roles: ['sales', 'ho', 'clm', 'cm'] },
+  { route: 'approvals', label: 'Approvals', icon: '✓', roles: ['clm', 'cm', 'marketing'], badge: 'pending' },
   { route: 'mappings', label: 'Doctor–Chemist Map', icon: '⇄', roles: ['sales'] },
-  { route: 'daily-allowance', label: 'Daily Allowance', icon: '＄', roles: ['sales', 'ho'], badge: 'da' },
-  { route: 'verification', label: 'Field Verification', icon: '☑', roles: ['marketing', 'admin'], badge: 'verify' },
+  { route: 'daily-allowance', label: 'Daily Allowance', icon: '＄', roles: ['sales', 'ho', 'clm', 'cm'], badge: 'da' },
+  { route: 'verification', label: 'Field Verification', icon: '☑', roles: ['clm', 'cm', 'marketing', 'admin'], badge: 'verify' },
   { section: 'Master Data' },
-  { route: 'doctors', label: 'Doctors (HCP)', icon: '⚕', roles: ['sales', 'ho'] },
-  { route: 'chemists', label: 'Chemists', icon: '✚', roles: ['sales', 'ho'] },
+  { route: 'doctors', label: 'Doctors (HCP)', icon: '⚕', roles: ['sales', 'ho', 'clm', 'cm'] },
+  { route: 'chemists', label: 'Chemists', icon: '✚', roles: ['sales', 'ho', 'clm', 'cm'] },
   { route: 'brands', label: 'Brands & Products', icon: '❖', roles: ['ho'] },
   { route: 'users', label: 'Users', icon: '👥', roles: ['admin'] },
   { section: 'Intelligence' },
   { route: 'sales-import', label: 'Sales Import', icon: '⬆', roles: ['ho'] },
-  { route: 'roi', label: 'Marketing Effectiveness Analytics', icon: '↗', roles: ['sales', 'ho'] },
-  { route: 'reports', label: 'Reports', icon: '⎙', roles: ['sales', 'ho'] },
+  { route: 'roi', label: 'Marketing Effectiveness Analytics', icon: '↗', roles: ['sales', 'ho', 'clm', 'cm'] },
+  { route: 'reports', label: 'Reports', icon: '⎙', roles: ['sales', 'ho', 'clm', 'cm'] },
   { route: 'audit', label: 'Audit Trail', icon: '🛡', roles: ['ho'] },
   { section: 'Account' },
-  { route: 'settings', label: 'Settings', icon: '⚙', roles: ['sales', 'ho'] },
+  { route: 'settings', label: 'Settings', icon: '⚙', roles: ['sales', 'ho', 'clm', 'cm'] },
 ];
 
 const TITLES = {
@@ -85,14 +85,15 @@ async function badgeCounts(user) {
   try {
     const notifs = await api('/notifications', { silent: true });
     out.unread = notifs.filter((n) => !n.read).length;
-    if (user.role === 'ho') {
+    if (['ho', 'clm', 'cm'].includes(user.role)) {
+      // Everything currently awaiting THIS user's stage in the chain.
       const [acts, ver, da] = await Promise.all([
-        api('/activities?status=submitted', { silent: true }),
+        api('/activities?pending=mine', { silent: true }),
         api('/verification/pending', { silent: true }),
-        api('/da?status=submitted', { silent: true }),
+        api('/da?pending=mine', { silent: true }),
       ]);
       out.pending = acts.length;
-      out.verify = ver.hcps.length + ver.chemists.length;
+      out.verify = (ver.adds.hcps.length + ver.adds.chemists.length + ver.removals.hcps.length + ver.removals.chemists.length);
       out.da = da.length;
     }
   } catch { /* non-fatal */ }

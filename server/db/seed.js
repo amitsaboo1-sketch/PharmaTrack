@@ -4,6 +4,28 @@ const bcrypt = require('bcryptjs');
 // so the app can show last-FY, month-on-month and year-on-year comparisons. Kenya & Tanzania
 // have two reps each to demonstrate account-wise ROI. All demo passwords: demo123.
 // Async: builds one statement array and commits it as a single libSQL write batch.
+// The management hierarchy (CLM per country + one CM) was introduced after the initial seed,
+// so existing databases (local + Turso) never received these users. This runs on every boot
+// and inserts only the missing ones — safe to call repeatedly (INSERT OR IGNORE on the PK/email).
+const MANAGEMENT_USERS = [
+  ['CLM001', 'Brian Otieno', 'clm.kenya@pharmatrack.demo', 'clm', 'Cluster Lead Manager', 'Kenya', 'KE'],
+  ['CLM002', 'Aisha Nakintu', 'clm.uganda@pharmatrack.demo', 'clm', 'Cluster Lead Manager', 'Uganda', 'UG'],
+  ['CLM003', 'Emanuel Shirima', 'clm.tanzania@pharmatrack.demo', 'clm', 'Cluster Lead Manager', 'Tanzania', 'TZ'],
+  ['CLM004', 'Claudine Uwera', 'clm.rwanda@pharmatrack.demo', 'clm', 'Cluster Lead Manager', 'Rwanda', 'RW'],
+  ['CLM005', 'Devan Pillay', 'clm.mauritius@pharmatrack.demo', 'clm', 'Cluster Lead Manager', 'Mauritius', 'MU'],
+  ['CLM006', 'Mwila Chisenga', 'clm.zambia@pharmatrack.demo', 'clm', 'Cluster Lead Manager', 'Zambia', 'ZM'],
+  ['CM001', 'Daniel Mbeki', 'cm@pharmatrack.demo', 'cm', 'Country Manager', 'International', null],
+];
+async function ensureManagementUsers(q) {
+  const hash = bcrypt.hashSync('demo123', 10);
+  for (const [id, name, email, role, subRole, territory, country] of MANAGEMENT_USERS) {
+    await q.run(
+      `INSERT OR IGNORE INTO users (id,name,email,password_hash,role,sub_role,territory,region,country,active)
+       VALUES (?,?,?,?,?,?,?, 'East Africa Pool', ?, 1)`,
+      [id, name, email, hash, role, subRole, territory, country]);
+  }
+}
+
 async function seedIfEmpty(q) {
   const row = await q.get('SELECT COUNT(*) AS c FROM users');
   if (row && Number(row.c) > 0) return;
@@ -49,6 +71,15 @@ async function seedIfEmpty(q) {
     ['HO001', 'Amit Verma', 'amit@pharmatrack.demo', hash, 'ho', 'Product Manager', 'Head Office', 'East Africa Pool', null],
     ['HO002', 'Kavita Rao', 'kavita@pharmatrack.demo', hash, 'ho', 'Finance', 'Head Office', 'East Africa Pool', null],
     ['HO003', 'Suresh Nair', 'admin@pharmatrack.demo', hash, 'ho', 'Admin', 'Head Office', 'East Africa Pool', null],
+    // Cluster Lead Managers — one per country (approve their country's SER submissions first).
+    ['CLM001', 'Brian Otieno', 'clm.kenya@pharmatrack.demo', hash, 'clm', 'Cluster Lead Manager', 'Kenya', 'East Africa Pool', 'KE'],
+    ['CLM002', 'Aisha Nakintu', 'clm.uganda@pharmatrack.demo', hash, 'clm', 'Cluster Lead Manager', 'Uganda', 'East Africa Pool', 'UG'],
+    ['CLM003', 'Emanuel Shirima', 'clm.tanzania@pharmatrack.demo', hash, 'clm', 'Cluster Lead Manager', 'Tanzania', 'East Africa Pool', 'TZ'],
+    ['CLM004', 'Claudine Uwera', 'clm.rwanda@pharmatrack.demo', hash, 'clm', 'Cluster Lead Manager', 'Rwanda', 'East Africa Pool', 'RW'],
+    ['CLM005', 'Devan Pillay', 'clm.mauritius@pharmatrack.demo', hash, 'clm', 'Cluster Lead Manager', 'Mauritius', 'East Africa Pool', 'MU'],
+    ['CLM006', 'Mwila Chisenga', 'clm.zambia@pharmatrack.demo', hash, 'clm', 'Cluster Lead Manager', 'Zambia', 'East Africa Pool', 'ZM'],
+    // Country Manager — over all countries; approves after the CLMs.
+    ['CM001', 'Daniel Mbeki', 'cm@pharmatrack.demo', hash, 'cm', 'Country Manager', 'International', 'East Africa Pool', null],
   ]);
 
   add(`INSERT INTO brands (id,name,therapy_area) VALUES (?,?,?)`, BRANDS.map((b) => [b[0], b[1], b[2]]));
@@ -226,8 +257,13 @@ async function seedIfEmpty(q) {
     ['HO002', 'da_submitted', 'James Mwangi submitted a daily allowance claim (Thika)', 'da', '2'],
   ]);
 
+  // Stamp the sequential-approval chain onto seeded records: SER submissions start at the CLM stage.
+  stmts.push({ sql: `UPDATE activities SET country = (SELECT country FROM users u WHERE u.id = activities.proposed_by)`, args: [] });
+  stmts.push({ sql: `UPDATE activities SET approval_stage = 'clm' WHERE status = 'submitted'`, args: [] });
+  stmts.push({ sql: `UPDATE daily_allowances SET approval_stage = 'clm' WHERE status = 'submitted'`, args: [] });
+
   await q.batch(stmts);
   console.log('Seeded East Africa pool (Apr 2025 – Jun 2026, fiscal April, 2 reps in KE & TZ).');
 }
 
-module.exports = { seedIfEmpty };
+module.exports = { seedIfEmpty, ensureManagementUsers };

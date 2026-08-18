@@ -31,4 +31,14 @@ async function notifyHO(type, message, entityType, entityId) {
   for (const u of hos) await notify(u.id, type, message, entityType, entityId);
 }
 
-module.exports = { audit, notify, notifyHO };
+// Notify whoever approves at a given chain stage (CLM is scoped to `country`).
+async function notifyStage(stage, country, message, entityType, entityId) {
+  let rows = [];
+  if (stage === 'clm') rows = await q.all(`SELECT id FROM users WHERE role='clm' AND country=? AND active=1`, [country]);
+  else if (stage === 'cm') rows = await q.all(`SELECT id FROM users WHERE role='cm' AND active=1`);
+  else if (stage === 'marketing') rows = await q.all(`SELECT id FROM users WHERE role='ho' AND sub_role IN ('Product Manager','Marketing Head') AND active=1`);
+  else if (stage === 'admin') rows = await q.all(`SELECT id FROM users WHERE role='ho' AND sub_role='Admin' AND active=1`);
+  for (const u of rows) await notify(u.id, 'approval', message, entityType, entityId);
+}
+
+module.exports = { audit, notify, notifyHO, notifyStage };
