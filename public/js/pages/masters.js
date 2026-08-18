@@ -66,6 +66,25 @@ function masterImportWizard(base, title, onDone) {
   stepUpload();
 }
 
+// Sales rep requests removal of one of their accounts, with a mandatory reason.
+// Goes to Marketing for review + comment, then Admin for final approval.
+export function requestRemoval(type, rec) {
+  const reason = h('textarea', { rows: 2, placeholder: 'Why should this be removed? *' });
+  modal(`Request removal — ${rec.name}`, [
+    h('div', { class: 'hint', style: 'margin-bottom:8px;' }, 'This goes to Marketing for review, then Admin for final approval.'),
+    field('Reason for removal *', reason),
+  ], (close) => [
+    h('button', { class: 'btn', onclick: close }, 'Cancel'),
+    h('button', { class: 'btn danger', onclick: async () => {
+      if (!reason.value.trim()) return toast('A reason for removal is required', 'error');
+      try {
+        await api('/verification/request-removal', { method: 'POST', body: { type, id: rec.id, reason: reason.value.trim() } });
+        toast('Removal requested — pending Marketing review', 'success'); close(); location.reload();
+      } catch { /* toast shown */ }
+    } }, 'Request removal'),
+  ]);
+}
+
 export default async function mastersPage(root, tab) {
   const user = session.user;
   if (tab === 'doctors') return doctors(root, user);
@@ -171,16 +190,19 @@ export async function addAdhocModal(type, onDone) {
     const name = h('input', { placeholder: 'Name *' });
     const ctype = select(CHEMIST_TYPES.map((t) => [t, t]));
     const addr = h('input', { placeholder: 'Address' });
+    const reason = h('textarea', { rows: 2, placeholder: 'Why are you adding this chemist? *' });
     return modal('Add chemist / wholesaler from the field', [
-      h('div', { class: 'hint', style: 'margin-bottom:10px;' }, 'Usable immediately; stays "unverified" until Head Office approves or merges it.'),
+      h('div', { class: 'hint', style: 'margin-bottom:10px;' }, 'Usable immediately; stays "unverified" until Marketing then Admin approve it.'),
       h('div', { class: 'form-row' }, field('Name *', name), field('Type', ctype)),
       field('Address', addr),
+      field('Reason for adding *', reason),
     ], (close) => [
       h('button', { class: 'btn', onclick: close }, 'Cancel'),
       h('button', { class: 'btn primary', onclick: async () => {
         if (!name.value.trim()) return toast('Name is required', 'error');
-        await api('/chemists/adhoc', { method: 'POST', body: { name: name.value, type: ctype.value, address: addr.value } });
-        toast('Added — pending HO verification', 'success'); close(); onDone();
+        if (!reason.value.trim()) return toast('Please add a reason for adding this chemist', 'error');
+        await api('/chemists/adhoc', { method: 'POST', body: { name: name.value, type: ctype.value, address: addr.value, reason: reason.value.trim() } });
+        toast('Added — pending Marketing verification', 'success'); close(); onDone();
       } }, 'Add'),
     ]);
   }
@@ -192,22 +214,25 @@ export async function addAdhocModal(type, onDone) {
     cls: select(CLASSES.map((c) => [c, c])), cat: select(CATEGORIES.map((c) => [c, c])),
   };
   const chem = chemistPicker(chemists);
+  const reason = h('textarea', { rows: 2, placeholder: 'Why are you adding this doctor? *' });
   modal('Add doctor from the field', [
-    h('div', { class: 'hint', style: 'margin-bottom:10px;' }, 'Usable immediately; stays "unverified" until Head Office approves or merges it.'),
+    h('div', { class: 'hint', style: 'margin-bottom:10px;' }, 'Usable immediately; stays "unverified" until Marketing then Admin approve it.'),
     h('div', { class: 'form-row' }, field('Name *', f.name), field('Speciality', f.speciality)),
     h('div', { class: 'form-row' }, field('Hospital / Clinic *', f.clinic), field('Location *', f.city)),
     h('div', { class: 'form-row' }, field('Class', f.cls), field('Category', f.cat)),
+    field('Reason for adding *', reason),
     h('div', { class: 'field' }, h('label', {}, 'Map chemists for this doctor'), chem.node),
   ], (close) => [
     h('button', { class: 'btn', onclick: close }, 'Cancel'),
     h('button', { class: 'btn primary', onclick: async () => {
       if (!f.name.value.trim()) return toast('Name is required', 'error');
       if (!f.clinic.value.trim() || !f.city.value.trim()) return toast('Hospital/Clinic and Location are required', 'error');
+      if (!reason.value.trim()) return toast('Please add a reason for adding this doctor', 'error');
       await api('/hcps/adhoc', { method: 'POST', body: {
         name: f.name.value, speciality: f.speciality.value, clinic: f.clinic.value, city: f.city.value,
-        class: f.cls.value, category: f.cat.value, chemistIds: chem.get(),
+        class: f.cls.value, category: f.cat.value, chemistIds: chem.get(), reason: reason.value.trim(),
       } });
-      toast('Added — pending HO verification', 'success'); close(); onDone();
+      toast('Added — pending Marketing verification', 'success'); close(); onDone();
     } }, 'Add Doctor'),
   ]);
 }

@@ -1,10 +1,12 @@
-import { api } from '../api.js';
+import { api, session } from '../api.js';
 import { h, table, badge, kpiCard, fmtMoney, fmtUnits, fmtPct, fmtDate, chartCanvas, makeChart } from '../ui.js';
+import { requestRemoval } from './masters.js';
 
 export default async function chemistPage(root, id) {
   if (!id) { root.append(h('div', { class: 'empty' }, 'No chemist selected')); return; }
   const d = await api(`/chemists/${id}/profile`);
   const c = d.chemist;
+  const canRemove = session.user.role === 'sales' && c.rep_id === session.user.id;
 
   const typeColor = { Retail: '#0891b2', Wholesaler: '#7c3aed', Stockist: '#d97706' }[c.type] || '#6b7280';
   root.append(h('div', { class: 'page-head' },
@@ -12,7 +14,11 @@ export default async function chemistPage(root, id) {
     h('h2', { style: 'font-size:18px;' }, c.name),
     h('span', { style: `font-weight:700; color:${typeColor};` }, c.type || 'Retail'),
     h('span', { class: 'hint' }, `${c.address || ''} · ${c.city || ''}`),
-    c.verified ? h('span', { class: 'badge ok' }, 'Verified') : h('span', { class: 'badge unverified' }, 'Unverified')));
+    c.verified ? h('span', { class: 'badge ok' }, 'Verified') : h('span', { class: 'badge unverified' }, 'Unverified'),
+    h('div', { class: 'spacer' }),
+    c.pending_removal
+      ? h('span', { class: 'badge unverified' }, 'Removal requested')
+      : (canRemove ? h('button', { class: 'btn sm danger', onclick: () => requestRemoval('chemist', c) }, 'Request removal') : null)));
 
   root.append(h('div', { class: 'grid cards-4' },
     kpiCard('Trade-Activity Spend (allocated)', fmtMoney(d.historicalSpend)),

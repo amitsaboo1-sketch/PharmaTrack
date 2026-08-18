@@ -1,16 +1,22 @@
-import { api } from '../api.js';
+import { api, session } from '../api.js';
 import { h, table, badge, kpiCard, fmtMoney, fmtPct, fmtDate, chartCanvas, makeChart } from '../ui.js';
+import { requestRemoval } from './masters.js';
 
 export default async function doctorPage(root, id) {
   if (!id) { root.append(h('div', { class: 'empty' }, 'No doctor selected')); return; }
   const d = await api(`/hcps/${id}/profile`);
   const x = d.hcp;
+  const canRemove = session.user.role === 'sales' && x.rep_id === session.user.id;
 
   root.append(h('div', { class: 'page-head' },
     h('button', { class: 'btn sm', onclick: () => (location.hash = '#/doctors') }, '← Back'),
     h('h2', { style: 'font-size:18px;' }, x.name),
     h('span', { class: 'hint' }, `${x.speciality || ''} · ${x.clinic || ''} · ${x.city || ''} · Class ${x.class || '—'} · Category ${x.category || '—'}`),
-    x.verified ? h('span', { class: 'badge ok' }, 'Verified') : h('span', { class: 'badge unverified' }, 'Unverified')));
+    x.verified ? h('span', { class: 'badge ok' }, 'Verified') : h('span', { class: 'badge unverified' }, 'Unverified'),
+    h('div', { class: 'spacer' }),
+    x.pending_removal
+      ? h('span', { class: 'badge unverified' }, 'Removal requested')
+      : (canRemove ? h('button', { class: 'btn sm danger', onclick: () => requestRemoval('hcp', x) }, 'Request removal') : null)));
 
   root.append(h('div', { class: 'grid cards-4' },
     kpiCard('Historical Spend (allocated)', fmtMoney(d.historicalSpend)),

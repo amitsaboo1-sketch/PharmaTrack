@@ -45,6 +45,16 @@ async function migrate() {
       await client.execute(`UPDATE ${tbl} SET mkt_verified = 1 WHERE verified = 1`);
     } catch { /* column already exists */ }
   }
+  // Verification justification/removal columns (added later).
+  const cols = [
+    'add_reason TEXT', 'mkt_note TEXT', 'pending_removal INTEGER DEFAULT 0',
+    'removal_reason TEXT', 'removal_mkt_note TEXT', 'removal_mkt_ok INTEGER DEFAULT 0',
+  ];
+  for (const tbl of ['hcps', 'chemists']) {
+    for (const col of cols) {
+      try { await client.execute(`ALTER TABLE ${tbl} ADD COLUMN ${col}`); } catch { /* exists */ }
+    }
+  }
 }
 
 // One-time schema + migrate + seed. Lazily initialized and cached so it runs once per process

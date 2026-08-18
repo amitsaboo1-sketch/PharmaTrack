@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { q } = require('../db/connection');
 const { requireRole, requireAdmin, isMarketing } = require('../middleware/auth');
-const { audit, notify } = require('../middleware/audit');
+const { audit, notify, notifyHO } = require('../middleware/audit');
 const { doctorProfile, chemistProfile } = require('../services/roi');
 const mastersCsv = require('../services/mastersCsv');
 
@@ -141,12 +141,13 @@ router.post('/hcps', requireRole('ho'), ah(async (req, res) => {
 router.post('/hcps/adhoc', requireRole('sales'), ah(async (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'Name is required' });
+  if (!b.reason || !String(b.reason).trim()) return res.status(400).json({ error: 'A reason for adding this doctor is required' });
   const id = await genId(q, 'HCP', 'hcps');
   await q.run(
-    `INSERT INTO hcps (id,name,speciality,clinic,address,city,territory,rep_id,class,category,verified,created_by,created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?)`,
+    `INSERT INTO hcps (id,name,speciality,clinic,address,city,territory,rep_id,class,category,verified,add_reason,created_by,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?,?)`,
     [id, b.name, b.speciality || '', b.clinic || '', b.address || '', b.city || '',
-     req.user.territory, req.user.id, b.class || 'Pearl', b.category || 'C', req.user.id, now()]
+     req.user.territory, req.user.id, b.class || 'Pearl', b.category || 'C', String(b.reason).trim(), req.user.id, now()]
   );
   for (const chemId of Array.isArray(b.chemistIds) ? b.chemistIds : []) {
     await q.run('INSERT OR IGNORE INTO hcp_chemist_map (hcp_id, chemist_id) VALUES (?,?)', [id, chemId]);
@@ -198,9 +199,10 @@ router.post('/chemists', requireRole('ho'), ah(async (req, res) => {
 router.post('/chemists/adhoc', requireRole('sales'), ah(async (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'Name is required' });
+  if (!b.reason || !String(b.reason).trim()) return res.status(400).json({ error: 'A reason for adding this chemist is required' });
   const id = await genId(q, 'CHEM', 'chemists');
-  await q.run(`INSERT INTO chemists (id,name,address,city,rep_id,is_hospital_in_house,type,verified) VALUES (?,?,?,?,?,?,?,0)`,
-    [id, b.name, b.address || '', b.city || '', req.user.id, b.isHospitalInHouse ? 1 : 0, b.type || 'Retail']);
+  await q.run(`INSERT INTO chemists (id,name,address,city,rep_id,is_hospital_in_house,type,verified,add_reason) VALUES (?,?,?,?,?,?,?,0,?)`,
+    [id, b.name, b.address || '', b.city || '', req.user.id, b.isHospitalInHouse ? 1 : 0, b.type || 'Retail', String(b.reason).trim()]);
   await audit(req, 'chemist.adhoc_create', 'chemist', id, null, b);
   res.json({ id, verified: 0 });
 }));
@@ -311,21 +313,45 @@ router.delete('/mappings', ah(async (req, res) => {
 }));
 
 // ---------- Field-account verification (HO) ----------
+// A sales rep can request removal of one of their accounts, with a mandatory reason.
+router.post('/verification/request-removal', requireRole('sales'), ah(async (req, res) => {
+  const { type, id, reason } = req.body || {};
+  if (!['hcp', 'chemist'].includes(type)) return res.status(400).json({ error: 'type must be hcp|chemist' });
+  if (!reason || !String(reason).trim()) return res.status(400).json({ error: 'A reason for removal is required' });
+  const table = type === 'hcp' ? 'hcps' : 'chemists';
+  const rec = await q.get(`SELECT * FROM ${table} WHERE id = ? AND active = 1`, [id]);
+  if (!rec) return res.status(404).json({ error: 'Account not found' });
+  if (rec.rep_id !== req.user.id) return res.status(403).json({ error: 'Not your account' });
+  if (rec.pending_removal) return res.status(409).json({ error: 'Removal already requested' });
+  await q.run(`UPDATE ${table} SET pending_removal = 1, removal_reason = ?, removal_mkt_ok = 0, removal_mkt_note = NULL WHERE id = ?`, [String(reason).trim(), id]);
+  await audit(req, `${type}.request_removal`, type, id, null, { reason: String(reason).trim() });
+  await notifyHO('removal_request', `${req.user.name} requested removal of ${rec.name} — awaiting Marketing review`, type, id);
+  res.json({ ok: true });
+}));
+
 router.get('/verification/pending', requireRole('ho'), ah(async (req, res) => {
   const marketing = isMarketing(req.user);
   const admin = req.user.sub_role === 'Admin';
-  if (!marketing && !admin) return res.json({ hcps: [], chemists: [], stage: null });
-  // Two-stage flow: Marketing sees not-yet-marketing-approved; Admin sees marketing-approved awaiting final.
-  const cond = marketing ? 'mkt_verified = 0 AND verified = 0' : 'mkt_verified = 1 AND verified = 0';
+  const empty = { stage: null, adds: { hcps: [], chemists: [] }, removals: { hcps: [], chemists: [] } };
+  if (!marketing && !admin) return res.json(empty);
+  // Two-stage flow. Adds: Marketing sees not-yet-approved, Admin sees marketing-approved.
+  const addCond = marketing ? 'mkt_verified = 0 AND verified = 0 AND pending_removal = 0' : 'mkt_verified = 1 AND verified = 0 AND pending_removal = 0';
+  const remCond = marketing ? 'pending_removal = 1 AND removal_mkt_ok = 0' : 'pending_removal = 1 AND removal_mkt_ok = 1';
   res.json({
-    hcps: await q.all(`SELECT * FROM hcps WHERE ${cond} AND active = 1`),
-    chemists: await q.all(`SELECT * FROM chemists WHERE ${cond} AND active = 1`),
     stage: marketing ? 'marketing' : 'admin',
+    adds: {
+      hcps: await q.all(`SELECT * FROM hcps WHERE ${addCond} AND active = 1`),
+      chemists: await q.all(`SELECT * FROM chemists WHERE ${addCond} AND active = 1`),
+    },
+    removals: {
+      hcps: await q.all(`SELECT * FROM hcps WHERE ${remCond} AND active = 1`),
+      chemists: await q.all(`SELECT * FROM chemists WHERE ${remCond} AND active = 1`),
+    },
   });
 }));
 
 router.post('/verification/decide', requireRole('ho'), ah(async (req, res) => {
-  const { type, id, action, mergeTargetId } = req.body || {};
+  const { type, id, action, mergeTargetId, note } = req.body || {};
   if (!['hcp', 'chemist'].includes(type)) return res.status(400).json({ error: 'type must be hcp|chemist' });
   const table = type === 'hcp' ? 'hcps' : 'chemists';
   const rec = await q.get(`SELECT * FROM ${table} WHERE id = ?`, [id]);
@@ -334,23 +360,41 @@ router.post('/verification/decide', requireRole('ho'), ah(async (req, res) => {
   const marketing = isMarketing(req.user);
   const admin = req.user.sub_role === 'Admin';
   if (!marketing && !admin) return res.status(403).json({ error: 'Only Marketing or Admin can verify field accounts' });
+  const hasNote = note && String(note).trim();
 
   if (action === 'approve') {
-    // Stage 1: Marketing approves a field-added account.
+    // ----- Removal request -----
+    if (rec.pending_removal) {
+      if (marketing) {
+        if (rec.removal_mkt_ok) return res.status(409).json({ error: 'Removal already reviewed by Marketing' });
+        if (!hasNote) return res.status(400).json({ error: 'Please add a comment before sending to Admin' });
+        await q.run(`UPDATE ${table} SET removal_mkt_ok = 1, removal_mkt_note = ? WHERE id = ?`, [String(note).trim(), id]);
+        await audit(req, `${type}.removal_marketing`, type, id, rec, { removal_mkt_note: String(note).trim() });
+        const admins = await q.all(`SELECT id FROM users WHERE role='ho' AND sub_role='Admin' AND active=1`);
+        for (const u of admins) await notify(u.id, 'verify', `Removal of ${rec.name} approved by Marketing — needs final approval`, type, id);
+        return res.json({ ok: true, stage: 'marketing', kind: 'removal' });
+      }
+      if (!rec.removal_mkt_ok) return res.status(409).json({ error: 'Marketing must review the removal first' });
+      await q.run(`UPDATE ${table} SET active = 0, pending_removal = 0 WHERE id = ?`, [id]);
+      await audit(req, `${type}.removal_admin`, type, id, rec, { active: 0 });
+      if (rec.rep_id) await notify(rec.rep_id, 'removed', `${rec.name} was removed from the master list`, type, id);
+      return res.json({ ok: true, stage: 'final', kind: 'removal' });
+    }
+    // ----- Addition -----
     if (marketing) {
       if (rec.mkt_verified) return res.status(409).json({ error: 'Already approved by Marketing — awaiting Admin' });
-      await q.run(`UPDATE ${table} SET mkt_verified = 1 WHERE id = ?`, [id]);
-      await audit(req, `${type}.verify_marketing`, type, id, rec, { mkt_verified: 1 });
+      if (!hasNote) return res.status(400).json({ error: 'Please add a comment before sending to Admin' });
+      await q.run(`UPDATE ${table} SET mkt_verified = 1, mkt_note = ? WHERE id = ?`, [String(note).trim(), id]);
+      await audit(req, `${type}.verify_marketing`, type, id, rec, { mkt_verified: 1, mkt_note: String(note).trim() });
       const admins = await q.all(`SELECT id FROM users WHERE role='ho' AND sub_role='Admin' AND active=1`);
       for (const u of admins) await notify(u.id, 'verify', `${rec.name} approved by Marketing — needs final verification`, type, id);
-      return res.json({ ok: true, stage: 'marketing' });
+      return res.json({ ok: true, stage: 'marketing', kind: 'add' });
     }
-    // Stage 2: Admin gives final verification (only after Marketing).
     if (!rec.mkt_verified) return res.status(409).json({ error: 'Marketing must approve first' });
     await q.run(`UPDATE ${table} SET verified = 1 WHERE id = ?`, [id]);
     await audit(req, `${type}.verify_admin`, type, id, rec, { verified: 1 });
     if (rec.rep_id || rec.created_by) await notify(rec.rep_id || rec.created_by, 'verified', `${rec.name} is now fully verified in the master list`, type, id);
-    return res.json({ ok: true, stage: 'final' });
+    return res.json({ ok: true, stage: 'final', kind: 'add' });
   }
 
   if (action === 'merge') {

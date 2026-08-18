@@ -83,17 +83,21 @@ export async function proposeModal(types, onDone) {
   async function addAdhoc(type, refresh) {
     const name = h('input', { placeholder: 'Name *' });
     const extra = type === 'hcp' ? h('input', { placeholder: 'Speciality' }) : h('input', { placeholder: 'Address' });
-    modal(`Add new ${type === 'hcp' ? 'doctor' : 'chemist'} (pending HO verification)`,
-      [field('Name', name), field(type === 'hcp' ? 'Speciality' : 'Address', extra)],
+    const reason = h('textarea', { rows: 2, placeholder: `Why are you adding this ${type === 'hcp' ? 'doctor' : 'chemist'}? *` });
+    modal(`Add new ${type === 'hcp' ? 'doctor' : 'chemist'} (pending verification)`,
+      [field('Name', name), field(type === 'hcp' ? 'Speciality' : 'Address', extra), field('Reason for adding *', reason)],
       (close) => [
         h('button', { class: 'btn', onclick: close }, 'Cancel'),
         h('button', {
           class: 'btn primary', onclick: async () => {
             if (!name.value.trim()) return toast('Name is required', 'error');
-            const body = type === 'hcp' ? { name: name.value, speciality: extra.value } : { name: name.value, address: extra.value };
+            if (!reason.value.trim()) return toast('Please add a reason for adding', 'error');
+            const body = type === 'hcp'
+              ? { name: name.value, speciality: extra.value, reason: reason.value.trim() }
+              : { name: name.value, address: extra.value, reason: reason.value.trim() };
             const r = await api(`/${type === 'hcp' ? 'hcps' : 'chemists'}/adhoc`, { method: 'POST', body });
             picked.set(`${type}:${r.id}`, { accountId: r.id, accountType: type });
-            toast(`Added as unverified — HO will review`, 'success');
+            toast(`Added as unverified — Marketing will review`, 'success');
             close(); refresh();
           },
         }, 'Add'),
