@@ -98,6 +98,20 @@ async function seedIfEmpty(q) {
   ];
   add(`INSERT INTO chemists (id,name,address,city,rep_id,is_hospital_in_house,type,country,verified,mkt_verified) VALUES (?,?,?,?,?,0,?,?,1,1)`, chemists);
 
+  // Field-added accounts pending verification — demo the two-stage Marketing -> Admin queue.
+  // verified=0 for all; mkt_verified=0 -> Marketing queue, mkt_verified=1 -> Admin (final) queue.
+  add(`INSERT INTO hcps (id,name,qualification,speciality,clinic,city,territory,rep_id,class,category,country,verified,mkt_verified,created_by,created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?,'${now}')`, [
+    ['HCP013', 'Dr. Wambui Njoroge', 'MBChB', 'Cardiology', 'Karen Hospital', 'Nairobi', 'Kenya', 'EMP001', 'Pearl', 'C', 'KE', 0, 'EMP001'],
+    ['HCP014', 'Dr. Ssentongo Musoke', 'MBChB', 'Diabetology', 'Kampala Medical Chambers', 'Kampala', 'Uganda', 'EMP002', 'Pearl', 'C', 'UG', 0, 'EMP002'],
+    ['HCP015', 'Dr. Fatuma Mwakalinga', 'MD', 'Oncology', 'Ocean Road Clinic', 'Dar es Salaam', 'Tanzania', 'EMP003', 'Pearl', 'C', 'TZ', 0, 'EMP003'],
+    ['HCP016', 'Dr. Peter Achieng', 'MBChB', 'Oncology', 'Kisumu County Hospital', 'Kisumu', 'Kenya', 'EMP001', 'Pearl', 'C', 'KE', 1, 'EMP001'],
+  ]);
+  add(`INSERT INTO chemists (id,name,address,city,rep_id,is_hospital_in_house,type,country,verified,mkt_verified) VALUES (?,?,?,?,?,0,?,?,0,?)`, [
+    ['CHEM011', 'Karen Corner Pharmacy', 'Karen Road', 'Nairobi', 'EMP001', 'Retail', 'KE', 0],
+    ['CHEM012', 'Ngara Wholesalers', 'Ngara', 'Nairobi', 'EMP001', 'Wholesaler', 'KE', 1],
+  ]);
+
   add(`INSERT INTO hcp_chemist_map (hcp_id,chemist_id) VALUES (?,?)`, [
     ['HCP001', 'CHEM001'], ['HCP001', 'CHEM002'], ['HCP002', 'CHEM003'],
     ['HCP003', 'CHEM004'], ['HCP003', 'CHEM005'], ['HCP004', 'CHEM004'],

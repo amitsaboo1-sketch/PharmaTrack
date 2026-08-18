@@ -315,18 +315,19 @@ export default async function activityDetailPage(root, id) {
     addExpense();
 
     modal(`Record Execution — ${act.title}`, [
+      h('div', { class: 'hint', style: 'margin-bottom:6px;' }, 'All required to submit: attendance, expense bills, feedback report, and at least one photo/document.'),
       h('div', { class: 'form-row' }, field('Actual date *', actualDate), field('Actual venue', actualVenue)),
-      h('div', { class: 'field' }, h('label', {}, 'Actual attendees (tick who came)'),
+      h('div', { class: 'field' }, h('label', {}, 'Actual attendees — tick who came *'),
         h('div', { class: 'check-list' }, attendRows.map(({ p, cb }) =>
           h('label', { class: 'check-item' }, cb, p.name || p.account_id, h('span', { class: 'meta' }, p.account_type.toUpperCase()))))),
       h('div', { class: 'field' },
         h('div', { style: 'display:flex; justify-content:space-between; align-items:center;' },
-          h('label', {}, 'Expense breakup (must total actual cost)'),
+          h('label', {}, 'Expense breakup — bills (must total actual cost) *'),
           h('span', { class: 'hint' }, 'Total: ', totalLabel)),
         expenseBox,
         h('button', { class: 'btn sm', type: 'button', onclick: addExpense }, '+ Add expense line')),
-      h('div', { class: 'field' }, h('label', {}, 'Event photos & receipts'), uploader.node),
-      field('Feedback report', notes),
+      h('div', { class: 'field' }, h('label', {}, 'Event photos & receipts *'), uploader.node),
+      field('Feedback report *', notes),
     ], (close) => [
       h('button', { class: 'btn', onclick: close }, 'Cancel'),
       h('button', {
@@ -335,6 +336,14 @@ export default async function activityDetailPage(root, id) {
             .filter((l) => Number(l.amt.value) > 0)
             .map((l) => ({ category: l.cat.value, amount: Number(l.amt.value), vendor: l.vendor.value, invoiceNo: l.inv.value }));
           const actualCost = expenses.reduce((s, e) => s + e.amount, 0);
+          const files = uploader.get();
+          const attendedCount = attendRows.filter(({ cb }) => cb.checked).length;
+          // Feedback, attendance, bills and photos are all mandatory on execution.
+          if (!actualDate.value) return toast('Actual date is required', 'error');
+          if (!attendedCount) return toast('Tick at least one attendee who attended', 'error');
+          if (!expenses.length) return toast('Add at least one expense (bill) line', 'error');
+          if (!notes.value.trim()) return toast('A feedback report is required', 'error');
+          if (!files.length) return toast('Attach at least one event photo or receipt', 'error');
           try {
             await api(`/activities/${id}/execute`, {
               method: 'POST',
@@ -342,7 +351,7 @@ export default async function activityDetailPage(root, id) {
                 actualDate: actualDate.value, actualVenue: actualVenue.value, actualCost,
                 expenses,
                 attendees: attendRows.map(({ p, cb }) => ({ accountId: p.account_id, accountType: p.account_type, attended: cb.checked })),
-                attachments: uploader.get(),
+                attachments: files,
                 completionRemarks: notes.value,
               },
             });

@@ -158,17 +158,24 @@ router.post('/:id/execute', requireRole('sales'), ah(async (req, res) => {
   if (!b.actualDate || !Number.isFinite(actualCost) || actualCost < 0) {
     return res.status(400).json({ error: 'actualDate and non-negative actualCost are required' });
   }
+  // On execution, a feedback report, attendance, expense bills and photos/documents are all mandatory.
+  if (!b.completionRemarks || !String(b.completionRemarks).trim()) {
+    return res.status(400).json({ error: 'A feedback report is required' });
+  }
   const expenses = Array.isArray(b.expenses) ? b.expenses : [];
+  if (!expenses.length) return res.status(400).json({ error: 'At least one expense (bill) line is required' });
   for (const e of expenses) {
     if (!EXPENSE_CATEGORIES.includes(e.category)) return res.status(400).json({ error: `Invalid expense category "${e.category}"` });
     if (!Number.isFinite(Number(e.amount)) || Number(e.amount) < 0) return res.status(400).json({ error: 'Expense amounts must be non-negative numbers' });
   }
   const sum = expenses.reduce((s, e) => s + Number(e.amount), 0);
-  if (expenses.length && Math.abs(sum - actualCost) > 0.01) {
+  if (Math.abs(sum - actualCost) > 0.01) {
     return res.status(400).json({ error: `Expense breakup (${sum}) must equal actual cost (${actualCost})` });
   }
   const attendees = Array.isArray(b.attendees) ? b.attendees : [];
   if (!attendees.some((a) => a.attended)) return res.status(400).json({ error: 'At least one actual attendee must be recorded' });
+  const attachments = Array.isArray(b.attachments) ? b.attachments : [];
+  if (!attachments.length) return res.status(400).json({ error: 'At least one event photo or document must be attached' });
 
   await q.tx(async (t) => {
     await t.run(`UPDATE activities SET status='executed', actual_date=?, actual_venue=?, actual_cost=?, completion_remarks=?, updated_at=? WHERE id=?`,

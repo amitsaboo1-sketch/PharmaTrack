@@ -81,13 +81,24 @@ test('critical path', async () => {
   const hoExec = await call(`/activities/${actId}/execute`, { method: 'POST', token: ho, body: {} });
   assert.equal(hoExec.status, 403);
 
-  // 5. execute with balanced expense breakup
+  // execution requires feedback + attendance + bills + photos — a bare body is rejected
+  const execIncomplete = await call(`/activities/${actId}/execute`, {
+    method: 'POST', token: rep,
+    body: { actualDate: '2026-03-20', actualCost: 9000,
+      expenses: [{ category: 'Food', amount: 9000 }],
+      attendees: [{ accountId: 'HCP001', accountType: 'hcp', attended: true }] },
+  });
+  assert.equal(execIncomplete.status, 400); // no feedback / no photos
+
+  // 5. execute with all mandatory fields (feedback, attendance, bills, photos)
   const exec = await call(`/activities/${actId}/execute`, {
     method: 'POST', token: rep,
     body: {
       actualDate: '2026-03-20', actualCost: 9000,
       expenses: [{ category: 'Food', amount: 5000 }, { category: 'Hall', amount: 4000 }],
       attendees: [{ accountId: 'HCP001', accountType: 'hcp', attended: true }],
+      completionRemarks: 'Strong turnout; good engagement on the brand.',
+      attachments: [{ kind: 'photo', filename: 'event.jpg', mime: 'image/jpeg', dataUrl: 'data:image/jpeg;base64,AAAA' }],
     },
   });
   assert.equal(exec.status, 200);
