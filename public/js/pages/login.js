@@ -15,10 +15,10 @@ export default function loginPage(onSuccess) {
     } catch { /* toast already shown */ }
   }
 
-  const demo = (mail) => h('button', {
+  const demo = (mail, label) => h('button', {
     type: 'button', class: 'chip',
     onclick: () => { email.value = mail; password.value = 'demo123'; },
-  }, mail.split('@')[0]);
+  }, label || mail.split('@')[0]);
 
   return h('div', { class: 'login-wrap' },
     h('form', { class: 'login-card', onsubmit: submit },
@@ -29,6 +29,7 @@ export default function loginPage(onSuccess) {
       h('button', { class: 'btn primary', style: 'width:100%; padding:10px;' }, 'Sign in'),
       h('div', { class: 'demo-chips' },
         h('span', { class: 'hint', style: 'width:100%; text-align:center;' }, 'Demo accounts (password: demo123)'),
-        demo('kenya@pharmatrack.demo'), demo('tanzania@pharmatrack.demo'),
-        demo('amit@pharmatrack.demo'), demo('kavita@pharmatrack.demo'), demo('admin@pharmatrack.demo'))));
+        demo('kenya@pharmatrack.demo'), demo('uganda@pharmatrack.demo'), demo('tanzania@pharmatrack.demo'),
+        demo('mauritius@pharmatrack.demo'), demo('zambia@pharmatrack.demo'), demo('rwanda@pharmatrack.demo'),
+        demo('amit@pharmatrack.demo', 'marketing'), demo('admin@pharmatrack.demo'))));
 }
