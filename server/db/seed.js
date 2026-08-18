@@ -8,13 +8,13 @@ const bcrypt = require('bcryptjs');
 // so existing databases (local + Turso) never received these users. This runs on every boot
 // and inserts only the missing ones — safe to call repeatedly (INSERT OR IGNORE on the PK/email).
 const MANAGEMENT_USERS = [
-  ['CLM001', 'Brian Otieno', 'clm.kenya@pharmatrack.demo', 'clm', 'Cluster Lead Manager', 'Kenya', 'KE'],
-  ['CLM002', 'Aisha Nakintu', 'clm.uganda@pharmatrack.demo', 'clm', 'Cluster Lead Manager', 'Uganda', 'UG'],
-  ['CLM003', 'Emanuel Shirima', 'clm.tanzania@pharmatrack.demo', 'clm', 'Cluster Lead Manager', 'Tanzania', 'TZ'],
-  ['CLM004', 'Claudine Uwera', 'clm.rwanda@pharmatrack.demo', 'clm', 'Cluster Lead Manager', 'Rwanda', 'RW'],
-  ['CLM005', 'Devan Pillay', 'clm.mauritius@pharmatrack.demo', 'clm', 'Cluster Lead Manager', 'Mauritius', 'MU'],
-  ['CLM006', 'Mwila Chisenga', 'clm.zambia@pharmatrack.demo', 'clm', 'Cluster Lead Manager', 'Zambia', 'ZM'],
-  ['CM001', 'Daniel Mbeki', 'cm@pharmatrack.demo', 'cm', 'Country Manager', 'International', null],
+  ['CLM001', 'Brian Otieno', 'clm.kenya@pharos.demo', 'clm', 'Cluster Lead Manager', 'Kenya', 'KE'],
+  ['CLM002', 'Aisha Nakintu', 'clm.uganda@pharos.demo', 'clm', 'Cluster Lead Manager', 'Uganda', 'UG'],
+  ['CLM003', 'Emanuel Shirima', 'clm.tanzania@pharos.demo', 'clm', 'Cluster Lead Manager', 'Tanzania', 'TZ'],
+  ['CLM004', 'Claudine Uwera', 'clm.rwanda@pharos.demo', 'clm', 'Cluster Lead Manager', 'Rwanda', 'RW'],
+  ['CLM005', 'Devan Pillay', 'clm.mauritius@pharos.demo', 'clm', 'Cluster Lead Manager', 'Mauritius', 'MU'],
+  ['CLM006', 'Mwila Chisenga', 'clm.zambia@pharos.demo', 'clm', 'Cluster Lead Manager', 'Zambia', 'ZM'],
+  ['CM001', 'Daniel Mbeki', 'cm@pharos.demo', 'cm', 'Country Manager', 'International', null],
 ];
 async function ensureManagementUsers(q) {
   const hash = bcrypt.hashSync('demo123', 10);
@@ -60,26 +60,26 @@ async function seedIfEmpty(q) {
     COUNTRIES.map((c) => [c[0], c[1], c[2], c[3]]));
 
   add(`INSERT INTO users (id,name,email,password_hash,role,sub_role,territory,region,country) VALUES (?,?,?,?,?,?,?,?,?)`, [
-    ['EMP001', 'James Mwangi', 'kenya@pharmatrack.demo', hash, 'sales', 'Medical Representative', 'Kenya', 'East Africa Pool', 'KE'],
-    ['EMP007', 'Alice Cherono', 'kenya2@pharmatrack.demo', hash, 'sales', 'Medical Representative', 'Kenya', 'East Africa Pool', 'KE'],
-    ['EMP002', 'Sarah Nakato', 'uganda@pharmatrack.demo', hash, 'sales', 'Medical Representative', 'Uganda', 'East Africa Pool', 'UG'],
-    ['EMP003', 'David Kimaro', 'tanzania@pharmatrack.demo', hash, 'sales', 'Medical Representative', 'Tanzania', 'East Africa Pool', 'TZ'],
-    ['EMP008', 'Peter Mrema', 'tanzania2@pharmatrack.demo', hash, 'sales', 'Medical Representative', 'Tanzania', 'East Africa Pool', 'TZ'],
-    ['EMP004', 'Grace Uwase', 'rwanda@pharmatrack.demo', hash, 'sales', 'Medical Representative', 'Rwanda', 'East Africa Pool', 'RW'],
-    ['EMP005', 'Rajesh Ramgoolam', 'mauritius@pharmatrack.demo', hash, 'sales', 'Medical Representative', 'Mauritius', 'East Africa Pool', 'MU'],
-    ['EMP006', 'Chanda Mulenga', 'zambia@pharmatrack.demo', hash, 'sales', 'Medical Representative', 'Zambia', 'East Africa Pool', 'ZM'],
-    ['HO001', 'Amit Verma', 'amit@pharmatrack.demo', hash, 'ho', 'Product Manager', 'Head Office', 'East Africa Pool', null],
-    ['HO002', 'Kavita Rao', 'kavita@pharmatrack.demo', hash, 'ho', 'Finance', 'Head Office', 'East Africa Pool', null],
-    ['HO003', 'Suresh Nair', 'admin@pharmatrack.demo', hash, 'ho', 'Admin', 'Head Office', 'East Africa Pool', null],
+    ['EMP001', 'James Mwangi', 'kenya@pharos.demo', hash, 'sales', 'Medical Representative', 'Kenya', 'East Africa Pool', 'KE'],
+    ['EMP007', 'Alice Cherono', 'kenya2@pharos.demo', hash, 'sales', 'Medical Representative', 'Kenya', 'East Africa Pool', 'KE'],
+    ['EMP002', 'Sarah Nakato', 'uganda@pharos.demo', hash, 'sales', 'Medical Representative', 'Uganda', 'East Africa Pool', 'UG'],
+    ['EMP003', 'David Kimaro', 'tanzania@pharos.demo', hash, 'sales', 'Medical Representative', 'Tanzania', 'East Africa Pool', 'TZ'],
+    ['EMP008', 'Peter Mrema', 'tanzania2@pharos.demo', hash, 'sales', 'Medical Representative', 'Tanzania', 'East Africa Pool', 'TZ'],
+    ['EMP004', 'Grace Uwase', 'rwanda@pharos.demo', hash, 'sales', 'Medical Representative', 'Rwanda', 'East Africa Pool', 'RW'],
+    ['EMP005', 'Rajesh Ramgoolam', 'mauritius@pharos.demo', hash, 'sales', 'Medical Representative', 'Mauritius', 'East Africa Pool', 'MU'],
+    ['EMP006', 'Chanda Mulenga', 'zambia@pharos.demo', hash, 'sales', 'Medical Representative', 'Zambia', 'East Africa Pool', 'ZM'],
+    ['HO001', 'Amit Verma', 'amit@pharos.demo', hash, 'ho', 'Product Manager', 'Head Office', 'East Africa Pool', null],
+    ['HO002', 'Kavita Rao', 'kavita@pharos.demo', hash, 'ho', 'Finance', 'Head Office', 'East Africa Pool', null],
+    ['HO003', 'Suresh Nair', 'admin@pharos.demo', hash, 'ho', 'Admin', 'Head Office', 'East Africa Pool', null],
     // Cluster Lead Managers — one per country (approve their country's SER submissions first).
-    ['CLM001', 'Brian Otieno', 'clm.kenya@pharmatrack.demo', hash, 'clm', 'Cluster Lead Manager', 'Kenya', 'East Africa Pool', 'KE'],
-    ['CLM002', 'Aisha Nakintu', 'clm.uganda@pharmatrack.demo', hash, 'clm', 'Cluster Lead Manager', 'Uganda', 'East Africa Pool', 'UG'],
-    ['CLM003', 'Emanuel Shirima', 'clm.tanzania@pharmatrack.demo', hash, 'clm', 'Cluster Lead Manager', 'Tanzania', 'East Africa Pool', 'TZ'],
-    ['CLM004', 'Claudine Uwera', 'clm.rwanda@pharmatrack.demo', hash, 'clm', 'Cluster Lead Manager', 'Rwanda', 'East Africa Pool', 'RW'],
-    ['CLM005', 'Devan Pillay', 'clm.mauritius@pharmatrack.demo', hash, 'clm', 'Cluster Lead Manager', 'Mauritius', 'East Africa Pool', 'MU'],
-    ['CLM006', 'Mwila Chisenga', 'clm.zambia@pharmatrack.demo', hash, 'clm', 'Cluster Lead Manager', 'Zambia', 'East Africa Pool', 'ZM'],
+    ['CLM001', 'Brian Otieno', 'clm.kenya@pharos.demo', hash, 'clm', 'Cluster Lead Manager', 'Kenya', 'East Africa Pool', 'KE'],
+    ['CLM002', 'Aisha Nakintu', 'clm.uganda@pharos.demo', hash, 'clm', 'Cluster Lead Manager', 'Uganda', 'East Africa Pool', 'UG'],
+    ['CLM003', 'Emanuel Shirima', 'clm.tanzania@pharos.demo', hash, 'clm', 'Cluster Lead Manager', 'Tanzania', 'East Africa Pool', 'TZ'],
+    ['CLM004', 'Claudine Uwera', 'clm.rwanda@pharos.demo', hash, 'clm', 'Cluster Lead Manager', 'Rwanda', 'East Africa Pool', 'RW'],
+    ['CLM005', 'Devan Pillay', 'clm.mauritius@pharos.demo', hash, 'clm', 'Cluster Lead Manager', 'Mauritius', 'East Africa Pool', 'MU'],
+    ['CLM006', 'Mwila Chisenga', 'clm.zambia@pharos.demo', hash, 'clm', 'Cluster Lead Manager', 'Zambia', 'East Africa Pool', 'ZM'],
     // Country Manager — over all countries; approves after the CLMs.
-    ['CM001', 'Daniel Mbeki', 'cm@pharmatrack.demo', hash, 'cm', 'Country Manager', 'International', 'East Africa Pool', null],
+    ['CM001', 'Daniel Mbeki', 'cm@pharos.demo', hash, 'cm', 'Country Manager', 'International', 'East Africa Pool', null],
   ]);
 
   add(`INSERT INTO brands (id,name,therapy_area) VALUES (?,?,?)`, BRANDS.map((b) => [b[0], b[1], b[2]]));

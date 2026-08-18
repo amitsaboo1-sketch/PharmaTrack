@@ -50,12 +50,12 @@ after(() => {
 
 test('critical path', async () => {
   // 1. login as sales rep
-  const repLogin = await call('/auth/login', { method: 'POST', body: { email: 'kenya@pharmatrack.demo', password: 'demo123' } });
+  const repLogin = await call('/auth/login', { method: 'POST', body: { email: 'kenya@pharos.demo', password: 'demo123' } });
   assert.equal(repLogin.status, 200);
   const rep = repLogin.data.token;
 
   // wrong password rejected
-  const bad = await call('/auth/login', { method: 'POST', body: { email: 'kenya@pharmatrack.demo', password: 'nope' } });
+  const bad = await call('/auth/login', { method: 'POST', body: { email: 'kenya@pharos.demo', password: 'nope' } });
   assert.equal(bad.status, 401);
 
   // 2. RBAC: sales cannot approve or see audit
@@ -72,20 +72,20 @@ test('critical path', async () => {
   const actId = proposal.data.id;
 
   // 4. Sequential sign-off: SER → CLM (Kenya) → CM → Marketing
-  const clmLogin = await call('/auth/login', { method: 'POST', body: { email: 'clm.kenya@pharmatrack.demo', password: 'demo123' } });
+  const clmLogin = await call('/auth/login', { method: 'POST', body: { email: 'clm.kenya@pharos.demo', password: 'demo123' } });
   assert.equal(clmLogin.status, 200);
   const clm = clmLogin.data.token;
-  const cmLogin = await call('/auth/login', { method: 'POST', body: { email: 'cm@pharmatrack.demo', password: 'demo123' } });
+  const cmLogin = await call('/auth/login', { method: 'POST', body: { email: 'cm@pharos.demo', password: 'demo123' } });
   assert.equal(cmLogin.status, 200);
   const cm = cmLogin.data.token;
-  const hoLogin = await call('/auth/login', { method: 'POST', body: { email: 'amit@pharmatrack.demo', password: 'demo123' } });
+  const hoLogin = await call('/auth/login', { method: 'POST', body: { email: 'amit@pharos.demo', password: 'demo123' } });
   const ho = hoLogin.data.token;
 
   // Out-of-turn approval is blocked: Marketing cannot approve while it is still at the CLM stage
   const early = await call(`/activities/${actId}/decision`, { method: 'POST', token: ho, body: { decision: 'approved', remarks: 'ok' } });
   assert.equal(early.status, 403);
   // A CLM from a different country cannot approve this Kenya proposal
-  const clmUgLogin = await call('/auth/login', { method: 'POST', body: { email: 'clm.uganda@pharmatrack.demo', password: 'demo123' } });
+  const clmUgLogin = await call('/auth/login', { method: 'POST', body: { email: 'clm.uganda@pharos.demo', password: 'demo123' } });
   const clmUg = clmUgLogin.data.token;
   const wrongClm = await call(`/activities/${actId}/decision`, { method: 'POST', token: clmUg, body: { decision: 'approved' } });
   assert.equal(wrongClm.status, 403);
@@ -263,7 +263,7 @@ test('critical path', async () => {
   });
   assert.equal(daCreate.status, 200);
   const daId = daCreate.data.id;
-  const adminLogin = await call('/auth/login', { method: 'POST', body: { email: 'admin@pharmatrack.demo', password: 'demo123' } });
+  const adminLogin = await call('/auth/login', { method: 'POST', body: { email: 'admin@pharos.demo', password: 'demo123' } });
   const admin = adminLogin.data.token;
   // Neither Marketing nor Admin can approve out of turn while it is still at the CLM stage
   const daByMarketing = await call(`/da/${daId}/decision`, { method: 'POST', token: ho, body: { decision: 'approved' } });

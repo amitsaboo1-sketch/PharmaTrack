@@ -18,18 +18,18 @@ export default function loginPage(onSuccess) {
   // Demo accounts grouped by role. Kept in one compact dropdown instead of a wall of chips.
   const DEMO_GROUPS = [
     ['Sales reps (SER)', [
-      ['kenya@pharmatrack.demo', 'Kenya'], ['uganda@pharmatrack.demo', 'Uganda'],
-      ['tanzania@pharmatrack.demo', 'Tanzania'], ['rwanda@pharmatrack.demo', 'Rwanda'],
-      ['mauritius@pharmatrack.demo', 'Mauritius'], ['zambia@pharmatrack.demo', 'Zambia'],
+      ['kenya@pharos.demo', 'Kenya'], ['uganda@pharos.demo', 'Uganda'],
+      ['tanzania@pharos.demo', 'Tanzania'], ['rwanda@pharos.demo', 'Rwanda'],
+      ['mauritius@pharos.demo', 'Mauritius'], ['zambia@pharos.demo', 'Zambia'],
     ]],
     ['Cluster Leads (CLM)', [
-      ['clm.kenya@pharmatrack.demo', 'CLM · Kenya'], ['clm.uganda@pharmatrack.demo', 'CLM · Uganda'],
-      ['clm.tanzania@pharmatrack.demo', 'CLM · Tanzania'], ['clm.rwanda@pharmatrack.demo', 'CLM · Rwanda'],
-      ['clm.mauritius@pharmatrack.demo', 'CLM · Mauritius'], ['clm.zambia@pharmatrack.demo', 'CLM · Zambia'],
+      ['clm.kenya@pharos.demo', 'CLM · Kenya'], ['clm.uganda@pharos.demo', 'CLM · Uganda'],
+      ['clm.tanzania@pharos.demo', 'CLM · Tanzania'], ['clm.rwanda@pharos.demo', 'CLM · Rwanda'],
+      ['clm.mauritius@pharos.demo', 'CLM · Mauritius'], ['clm.zambia@pharos.demo', 'CLM · Zambia'],
     ]],
     ['Management & Head Office', [
-      ['cm@pharmatrack.demo', 'Country Manager (all countries)'],
-      ['amit@pharmatrack.demo', 'Marketing'], ['admin@pharmatrack.demo', 'Admin / Operations'],
+      ['cm@pharos.demo', 'Country Manager (all countries)'],
+      ['amit@pharos.demo', 'Marketing'], ['admin@pharos.demo', 'Admin / Operations'],
     ]],
   ];
 

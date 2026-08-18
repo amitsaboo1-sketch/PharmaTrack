@@ -81,6 +81,12 @@ ALTER TABLE users_new RENAME TO users;
     }
   } catch (e) { console.error('users role migration:', e && e.message); }
 
+  // Demo accounts were renamed from @pharmatrack.demo to @pharos.demo (portal is "Pharos").
+  // Rename any pre-existing rows in place — idempotent (the LIKE matches nothing once renamed).
+  try {
+    await client.execute("UPDATE users SET email = REPLACE(email, '@pharmatrack.demo', '@pharos.demo') WHERE email LIKE '%@pharmatrack.demo'");
+  } catch (e) { console.error('email domain migration:', e && e.message); }
+
   // Backfill in-flight items into the new chain (front of the chain = CLM).
   try {
     await client.execute(`UPDATE activities SET approval_stage = 'clm' WHERE status = 'submitted' AND (approval_stage IS NULL OR approval_stage = '')`);

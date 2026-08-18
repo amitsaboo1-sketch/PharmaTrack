@@ -39,13 +39,16 @@ expense proofs, routed to HO for approval.
 
 | Email | Role |
 |---|---|
-| kenya@pharmatrack.demo | Sales — Medical Rep, Kenya (KES) |
-| uganda@pharmatrack.demo | Sales — Medical Rep, Uganda (UGX) |
-| tanzania@pharmatrack.demo | Sales — Medical Rep, Tanzania (TZS) |
+| kenya@pharos.demo | Sales — Medical Rep, Kenya (KES) |
+| uganda@pharos.demo | Sales — Medical Rep, Uganda (UGX) |
+| tanzania@pharos.demo | Sales — Medical Rep, Tanzania (TZS) |
 | rwanda@ / mauritius@ / zambia@ | Sales — Medical Rep (RWF / MUR / ZMW) |
-| amit@pharmatrack.demo | HO — Product Manager (approvals) |
-| kavita@pharmatrack.demo | HO — Finance (DA approvals, exports) |
-| admin@pharmatrack.demo | HO — Admin (users, config) |
+| clm.kenya@pharos.demo | Cluster Lead Manager — Kenya (approves for own country) |
+| clm.uganda@ / clm.tanzania@ / clm.rwanda@ / clm.mauritius@ / clm.zambia@ | Cluster Lead Manager — respective country |
+| cm@pharos.demo | Country Manager — all countries |
+| amit@pharos.demo | HO — Product Manager / Marketing (approvals) |
+| kavita@pharos.demo | HO — Finance (view-only) |
+| admin@pharos.demo | HO — Admin / Operations (DA + final verification, users, config) |
 
 ## Try the full loop
 

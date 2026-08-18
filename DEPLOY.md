@@ -53,8 +53,8 @@ vercel --prod   # promote to production
 ## 5. Verify
 
 - `GET https://<your-app>.vercel.app/api/health` -> `{"status":"ok", ...}`
-- Open the app and log in with a demo account: `amit@pharmatrack.demo` / `demo123`
-  (Product Manager / HO). Other demo logins are `*@pharmatrack.demo` / `demo123`.
+- Open the app and log in with a demo account: `amit@pharos.demo` / `demo123`
+  (Product Manager / HO). Other demo logins are `*@pharos.demo` / `demo123`.
 
 ## Notes
 
