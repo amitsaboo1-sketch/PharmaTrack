@@ -13,7 +13,7 @@ async function repView(root, user) {
   const listBox = h('div');
 
   root.append(h('div', { class: 'page-head' },
-    h('div', { class: 'hint' }, 'Log your daily allowance and attach expense proofs. Amounts are in your country currency; claims go to Head Office / Finance for approval.'),
+    h('div', { class: 'hint' }, 'Log your daily allowance and attach expense proofs. Amounts are in your country currency; claims go to Operations (Admin) for approval.'),
     h('div', { class: 'spacer' }),
     h('button', { class: 'btn primary', onclick: () => newClaimModal(categories, load) }, '+ New DA Claim')),
     listBox);
@@ -116,8 +116,9 @@ async function repView(root, user) {
   await load();
 }
 
-// ---------------- HO view: review & approve ----------------
+// ---------------- HO view: review & approve (approval is Admin/Operations only) ----------------
 async function hoView(root) {
+  const isAdmin = session.user.role === 'ho' && session.user.sub_role === 'Admin';
   const filterSel = select([['submitted', 'Pending'], ['', 'All'], ['approved', 'Approved'], ['rejected', 'Rejected']],
     { onchange: (e) => load(e.target.value) });
   const listBox = h('div');
@@ -148,8 +149,8 @@ async function hoView(root) {
       c.attachments.length
         ? table(['Category', 'Amount', 'File'], c.attachments.map((a) => [a.category, fmtMoney(a.amount, c.currency_code), attachmentLink(a)]))
         : h('div', { class: 'empty' }, 'No attachments'),
-      c.status === 'submitted' ? field('Remarks', remarks) : infoRow('Decision', `${c.status}${c.remarks ? ' — ' + c.remarks : ''}`),
-    ], (close) => c.status === 'submitted'
+      c.status === 'submitted' && isAdmin ? field('Remarks', remarks) : infoRow('Decision', `${c.status}${c.remarks ? ' — ' + c.remarks : ''}`),
+    ], (close) => c.status === 'submitted' && isAdmin
       ? [
           h('button', { class: 'btn', onclick: close }, 'Cancel'),
           h('button', { class: 'btn danger', onclick: () => decide(c.id, 'rejected', remarks.value, close) }, 'Reject'),

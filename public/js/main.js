@@ -51,7 +51,7 @@ const NAV = [
   { route: 'approvals', label: 'Approvals', icon: '✓', roles: ['marketing'], badge: 'pending' },
   { route: 'mappings', label: 'Doctor–Chemist Map', icon: '⇄', roles: ['sales'] },
   { route: 'daily-allowance', label: 'Daily Allowance', icon: '＄', roles: ['sales', 'ho'], badge: 'da' },
-  { route: 'verification', label: 'Field Verification', icon: '☑', roles: ['ho'], badge: 'verify' },
+  { route: 'verification', label: 'Field Verification', icon: '☑', roles: ['marketing', 'admin'], badge: 'verify' },
   { section: 'Master Data' },
   { route: 'doctors', label: 'Doctors (HCP)', icon: '⚕', roles: ['sales', 'ho'] },
   { route: 'chemists', label: 'Chemists', icon: '✚', roles: ['sales', 'ho'] },
@@ -100,9 +100,11 @@ async function badgeCounts(user) {
 }
 
 function isVisible(item, user) {
-  if (item.roles.includes('admin')) return user.role === 'ho' && user.sub_role === 'Admin';
-  if (item.roles.includes('marketing')) return user.role === 'ho' && ['Product Manager', 'Marketing Head'].includes(user.sub_role);
-  return item.roles.includes(user.role);
+  return item.roles.some((r) => {
+    if (r === 'admin') return user.role === 'ho' && user.sub_role === 'Admin';
+    if (r === 'marketing') return user.role === 'ho' && ['Product Manager', 'Marketing Head'].includes(user.sub_role);
+    return r === user.role;
+  });
 }
 
 async function render() {

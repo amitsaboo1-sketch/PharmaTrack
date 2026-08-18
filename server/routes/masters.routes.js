@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { q } = require('../db/connection');
-const { requireRole, requireAdmin } = require('../middleware/auth');
+const { requireRole, requireAdmin, isMarketing } = require('../middleware/auth');
 const { audit, notify } = require('../middleware/audit');
 const { doctorProfile, chemistProfile } = require('../services/roi');
 const mastersCsv = require('../services/mastersCsv');
@@ -67,8 +67,8 @@ router.post('/masters/doctors/import', requireRole('ho'), ah(async (req, res) =>
         updated++;
       } else {
         const id = r.id || await genId(t, 'HCP', 'hcps');
-        await t.run(`INSERT INTO hcps (id,name,speciality,qualification,clinic,city,territory,rep_id,class,category,country,registration_no,contact,verified,created_by,created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`,
+        await t.run(`INSERT INTO hcps (id,name,speciality,qualification,clinic,city,territory,rep_id,class,category,country,registration_no,contact,verified,mkt_verified,created_by,created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,1,?,?)`,
           [id, r.name, r.speciality, r.qualification, r.clinic, r.city, r.country, r.repId, r.class, r.category, r.country, r.registrationNo, r.contact, req.user.id, now()]);
         r.id = id; inserted++;
       }
@@ -93,7 +93,7 @@ router.post('/masters/chemists/import', requireRole('ho'), ah(async (req, res) =
         updated++;
       } else {
         const id = r.id || await genId(t, 'CHEM', 'chemists');
-        await t.run(`INSERT INTO chemists (id,name,type,address,city,rep_id,country,is_hospital_in_house,verified) VALUES (?,?,?,?,?,?,?,?,1)`,
+        await t.run(`INSERT INTO chemists (id,name,type,address,city,rep_id,country,is_hospital_in_house,verified,mkt_verified) VALUES (?,?,?,?,?,?,?,?,1,1)`,
           [id, r.name, r.type, r.address, r.city, r.repId, r.country, r.isHospitalInHouse]);
         inserted++;
       }
@@ -126,8 +126,8 @@ router.post('/hcps', requireRole('ho'), ah(async (req, res) => {
   if (!b.name) return res.status(400).json({ error: 'Name is required' });
   const id = b.id || await genId(q, 'HCP', 'hcps');
   await q.run(
-    `INSERT INTO hcps (id,name,qualification,speciality,clinic,address,city,territory,rep_id,class,category,registration_no,contact,verified,created_by,created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`,
+    `INSERT INTO hcps (id,name,qualification,speciality,clinic,address,city,territory,rep_id,class,category,registration_no,contact,verified,mkt_verified,created_by,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,1,?,?)`,
     [id, b.name, b.qualification || '', b.speciality || '', b.clinic || '', b.address || '', b.city || '',
      b.territory || '', b.repId || null, b.class || 'Ruby', b.category || 'B', b.registrationNo || '', b.contact || '', req.user.id, now()]
   );
@@ -189,7 +189,7 @@ router.post('/chemists', requireRole('ho'), ah(async (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'Name is required' });
   const id = b.id || await genId(q, 'CHEM', 'chemists');
-  await q.run(`INSERT INTO chemists (id,name,address,city,rep_id,is_hospital_in_house,type,verified) VALUES (?,?,?,?,?,?,?,1)`,
+  await q.run(`INSERT INTO chemists (id,name,address,city,rep_id,is_hospital_in_house,type,verified,mkt_verified) VALUES (?,?,?,?,?,?,?,1,1)`,
     [id, b.name, b.address || '', b.city || '', b.repId || null, b.isHospitalInHouse ? 1 : 0, b.type || 'Retail']);
   await audit(req, 'chemist.create', 'chemist', id, null, b);
   res.json({ id });
@@ -312,9 +312,15 @@ router.delete('/mappings', ah(async (req, res) => {
 
 // ---------- Field-account verification (HO) ----------
 router.get('/verification/pending', requireRole('ho'), ah(async (req, res) => {
+  const marketing = isMarketing(req.user);
+  const admin = req.user.sub_role === 'Admin';
+  if (!marketing && !admin) return res.json({ hcps: [], chemists: [], stage: null });
+  // Two-stage flow: Marketing sees not-yet-marketing-approved; Admin sees marketing-approved awaiting final.
+  const cond = marketing ? 'mkt_verified = 0 AND verified = 0' : 'mkt_verified = 1 AND verified = 0';
   res.json({
-    hcps: await q.all('SELECT * FROM hcps WHERE verified = 0 AND active = 1'),
-    chemists: await q.all('SELECT * FROM chemists WHERE verified = 0 AND active = 1'),
+    hcps: await q.all(`SELECT * FROM hcps WHERE ${cond} AND active = 1`),
+    chemists: await q.all(`SELECT * FROM chemists WHERE ${cond} AND active = 1`),
+    stage: marketing ? 'marketing' : 'admin',
   });
 }));
 
@@ -325,11 +331,26 @@ router.post('/verification/decide', requireRole('ho'), ah(async (req, res) => {
   const rec = await q.get(`SELECT * FROM ${table} WHERE id = ?`, [id]);
   if (!rec) return res.status(404).json({ error: 'Account not found' });
 
+  const marketing = isMarketing(req.user);
+  const admin = req.user.sub_role === 'Admin';
+  if (!marketing && !admin) return res.status(403).json({ error: 'Only Marketing or Admin can verify field accounts' });
+
   if (action === 'approve') {
+    // Stage 1: Marketing approves a field-added account.
+    if (marketing) {
+      if (rec.mkt_verified) return res.status(409).json({ error: 'Already approved by Marketing — awaiting Admin' });
+      await q.run(`UPDATE ${table} SET mkt_verified = 1 WHERE id = ?`, [id]);
+      await audit(req, `${type}.verify_marketing`, type, id, rec, { mkt_verified: 1 });
+      const admins = await q.all(`SELECT id FROM users WHERE role='ho' AND sub_role='Admin' AND active=1`);
+      for (const u of admins) await notify(u.id, 'verify', `${rec.name} approved by Marketing — needs final verification`, type, id);
+      return res.json({ ok: true, stage: 'marketing' });
+    }
+    // Stage 2: Admin gives final verification (only after Marketing).
+    if (!rec.mkt_verified) return res.status(409).json({ error: 'Marketing must approve first' });
     await q.run(`UPDATE ${table} SET verified = 1 WHERE id = ?`, [id]);
-    await audit(req, `${type}.verify_approve`, type, id, rec, { verified: 1 });
-    if (rec.rep_id || rec.created_by) await notify(rec.rep_id || rec.created_by, 'verified', `${rec.name} approved to master list`, type, id);
-    return res.json({ ok: true });
+    await audit(req, `${type}.verify_admin`, type, id, rec, { verified: 1 });
+    if (rec.rep_id || rec.created_by) await notify(rec.rep_id || rec.created_by, 'verified', `${rec.name} is now fully verified in the master list`, type, id);
+    return res.json({ ok: true, stage: 'final' });
   }
 
   if (action === 'merge') {

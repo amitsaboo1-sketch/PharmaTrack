@@ -35,13 +35,26 @@ const q = {
   },
 };
 
-// One-time schema + seed. Lazily initialized and cached so it runs once per process
+// Idempotent migrations for columns added after the initial schema (CREATE TABLE IF NOT
+// EXISTS won't alter an existing table). Each ALTER throws once the column exists — caught.
+async function migrate() {
+  for (const tbl of ['hcps', 'chemists']) {
+    try {
+      await client.execute(`ALTER TABLE ${tbl} ADD COLUMN mkt_verified INTEGER DEFAULT 0`);
+      // Column just added: anything already verified is treated as fully approved (both stages).
+      await client.execute(`UPDATE ${tbl} SET mkt_verified = 1 WHERE verified = 1`);
+    } catch { /* column already exists */ }
+  }
+}
+
+// One-time schema + migrate + seed. Lazily initialized and cached so it runs once per process
 // (works for a long-lived server and for serverless cold starts).
 let initPromise = null;
 function ready() {
   if (!initPromise) {
     initPromise = (async () => {
       await client.executeMultiple(SCHEMA_SQL);
+      await migrate();
       await seedIfEmpty(q);
     })().catch((err) => { initPromise = null; throw err; });
   }

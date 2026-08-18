@@ -68,8 +68,8 @@ async function seedIfEmpty(q) {
     ['PERSONAL', 'Personalized Activity', 0], ['DIGITAL', 'Digital Campaign', 0], ['OTHER', 'Other Promotional Activity', 0],
   ]);
 
-  add(`INSERT INTO hcps (id,name,qualification,speciality,clinic,city,territory,rep_id,class,category,country,verified,created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,1,'${now}')`, [
+  add(`INSERT INTO hcps (id,name,qualification,speciality,clinic,city,territory,rep_id,class,category,country,verified,mkt_verified,created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,1,1,'${now}')`, [
     ['HCP001', 'Dr. Otieno', 'MD', 'Cardiology', 'Otieno Heart Clinic', 'Nairobi', 'Kenya', 'EMP001', 'Diamond', 'A', 'KE'],
     ['HCP002', 'Dr. Wanjiku', 'MD', 'Oncology', 'Wanjiku Cancer Centre', 'Nairobi', 'Kenya', 'EMP007', 'Diamond', 'A', 'KE'],
     ['HCP003', 'Dr. Okello', 'MD', 'Cardiology', 'Okello Clinic', 'Kampala', 'Uganda', 'EMP002', 'Ruby', 'B', 'UG'],
@@ -96,7 +96,7 @@ async function seedIfEmpty(q) {
     ['CHEM009', 'Port Louis Central Pharmacy', 'Port Louis CBD', 'Port Louis', 'EMP005', 'Retail', 'MU'],
     ['CHEM010', 'Lusaka Central Pharmacy', 'Lusaka CBD', 'Lusaka', 'EMP006', 'Retail', 'ZM'],
   ];
-  add(`INSERT INTO chemists (id,name,address,city,rep_id,is_hospital_in_house,type,country,verified) VALUES (?,?,?,?,?,0,?,?,1)`, chemists);
+  add(`INSERT INTO chemists (id,name,address,city,rep_id,is_hospital_in_house,type,country,verified,mkt_verified) VALUES (?,?,?,?,?,0,?,?,1,1)`, chemists);
 
   add(`INSERT INTO hcp_chemist_map (hcp_id,chemist_id) VALUES (?,?)`, [
     ['HCP001', 'CHEM001'], ['HCP001', 'CHEM002'], ['HCP002', 'CHEM003'],

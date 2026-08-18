@@ -216,14 +216,19 @@ test('critical path', async () => {
   const dl = await call('/reports/sales.csv', { token: rep });
   assert.equal(dl.status, 403);
 
-  // 10. daily allowance: rep creates a claim, HO approves
+  // 10. daily allowance: rep creates a claim; only Admin (Operations) can approve
   const daCreate = await call('/da', {
     method: 'POST', token: rep,
     body: { daDate: '2026-06-26', location: 'Nairobi', purpose: 'calls', daAmount: 3000,
             attachments: [{ category: 'Fuel', amount: 1500, filename: 'r.jpg' }] },
   });
   assert.equal(daCreate.status, 200);
-  const daDecision = await call(`/da/${daCreate.data.id}/decision`, { method: 'POST', token: ho, body: { decision: 'approved' } });
+  // Marketing/PM cannot approve DA
+  const daByMarketing = await call(`/da/${daCreate.data.id}/decision`, { method: 'POST', token: ho, body: { decision: 'approved' } });
+  assert.equal(daByMarketing.status, 403);
+  const adminLogin = await call('/auth/login', { method: 'POST', body: { email: 'admin@pharmatrack.demo', password: 'demo123' } });
+  const admin = adminLogin.data.token;
+  const daDecision = await call(`/da/${daCreate.data.id}/decision`, { method: 'POST', token: admin, body: { decision: 'approved' } });
   assert.equal(daDecision.status, 200);
 
   // 11. rollback batch

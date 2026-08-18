@@ -10,12 +10,12 @@ CREATE TABLE IF NOT EXISTS hcps (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, qualification TEXT, speciality TEXT, clinic TEXT, address TEXT,
   city TEXT, territory TEXT, rep_id TEXT, class TEXT DEFAULT 'Ruby', category TEXT DEFAULT 'B',
   potential_score INTEGER DEFAULT 5, registration_no TEXT, contact TEXT, country TEXT,
-  verified INTEGER DEFAULT 1, active INTEGER DEFAULT 1, created_by TEXT, created_at TEXT
+  verified INTEGER DEFAULT 1, mkt_verified INTEGER DEFAULT 0, active INTEGER DEFAULT 1, created_by TEXT, created_at TEXT
 );
 CREATE TABLE IF NOT EXISTS chemists (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, address TEXT, city TEXT, rep_id TEXT,
   is_hospital_in_house INTEGER DEFAULT 0, type TEXT DEFAULT 'Retail', country TEXT,
-  verified INTEGER DEFAULT 1, active INTEGER DEFAULT 1
+  verified INTEGER DEFAULT 1, mkt_verified INTEGER DEFAULT 0, active INTEGER DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS hcp_chemist_map (
   hcp_id TEXT NOT NULL, chemist_id TEXT NOT NULL, weight REAL DEFAULT 1.0, PRIMARY KEY (hcp_id, chemist_id)

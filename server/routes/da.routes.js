@@ -1,6 +1,6 @@
 const express = require('express');
 const { q } = require('../db/connection');
-const { requireRole } = require('../middleware/auth');
+const { requireRole, requireAdmin } = require('../middleware/auth');
 const { audit, notify, notifyHO } = require('../middleware/audit');
 
 const router = express.Router();
@@ -84,8 +84,8 @@ router.post('/', requireRole('sales'), ah(async (req, res) => {
   res.json({ id, currency: cur.code });
 }));
 
-// HO decision on a claim.
-router.post('/:id/decision', requireRole('ho'), ah(async (req, res) => {
+// Admin (Operations) decision on a claim — Marketing/Finance cannot approve DA.
+router.post('/:id/decision', requireAdmin, ah(async (req, res) => {
   const d = await q.get('SELECT * FROM daily_allowances WHERE id = ?', [req.params.id]);
   if (!d) return res.status(404).json({ error: 'Claim not found' });
   if (d.status !== 'submitted') return res.status(409).json({ error: 'Only submitted claims can be decided' });
