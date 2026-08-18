@@ -116,6 +116,38 @@ export default async function activityDetailPage(root, id) {
         p.attended ? h('b', { style: 'color:var(--accent)' }, '✔') : '—',
         p.remarks || '']))));
 
+  // ---------- Comments & feedback (operations / HO <-> sales owner) ----------
+  const commentsCard = h('div', { class: 'card', style: 'margin-top:14px;' });
+  root.append(commentsCard);
+  const renderComment = (c) => h('div', { style: 'border:1px solid var(--border); border-radius:8px; padding:10px 12px;' },
+    h('div', { style: 'display:flex; justify-content:space-between; gap:10px; margin-bottom:4px; align-items:center;' },
+      h('span', {}, h('b', {}, c.author_name || c.author_id),
+        c.author_role ? h('span', { style: 'margin-left:8px; font-size:10.5px; font-weight:700; color:var(--primary); background:var(--primary-soft); padding:1px 8px; border-radius:999px;' }, c.author_role) : null),
+      h('span', { class: 'hint' }, fmtDate(c.created_at))),
+    h('div', { style: 'font-size:13px; white-space:pre-wrap;' }, c.body));
+  async function loadComments() {
+    const comments = await api(`/activities/${id}/comments`);
+    commentsCard.innerHTML = '';
+    commentsCard.append(
+      h('h3', {}, `Comments & Feedback (${comments.length})`),
+      h('div', { class: 'hint', style: 'margin-bottom:10px;' }, 'Operations / Head Office leave notes here — the activity owner is notified and can make the necessary changes.'),
+      comments.length
+        ? h('div', { style: 'display:flex; flex-direction:column; gap:10px;' }, comments.map(renderComment))
+        : h('div', { class: 'hint' }, 'No comments yet.'));
+    if (user.role === 'ho' || isOwner) {
+      const ta = h('textarea', { rows: 2, placeholder: 'Add a comment…', style: 'width:100%; margin-top:12px;' });
+      const btn = h('button', { class: 'btn primary', style: 'margin-top:8px;', onclick: async () => {
+        if (!ta.value.trim()) return toast('Write a comment first', 'error');
+        try {
+          await api(`/activities/${id}/comments`, { method: 'POST', body: { body: ta.value.trim() } });
+          ta.value = ''; toast('Comment posted', 'success'); loadComments();
+        } catch { /* toast shown */ }
+      } }, 'Post comment');
+      commentsCard.append(ta, btn);
+    }
+  }
+  loadComments();
+
   if (a.status === 'executed' || a.status === 'closed') {
     root.append(h('div', { class: 'grid cols-2', style: 'margin-top:14px;' },
       h('div', { class: 'card' },

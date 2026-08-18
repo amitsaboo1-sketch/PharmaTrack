@@ -226,5 +226,33 @@ router.post('/:id/reopen', requireRole('ho'), ah(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// ---------- comments / feedback (operations <-> sales owner) ----------
+// Visible to HO (operations, marketing, finance) and the activity's sales owner.
+router.get('/:id/comments', ah(async (req, res) => {
+  const { act, error } = await scopedActivity(req, req.params.id);
+  if (error) return res.status(error[0]).json({ error: error[1] });
+  res.json(await q.all(
+    `SELECT id, author_id, author_name, author_role, body, created_at
+     FROM activity_comments WHERE activity_id = ? ORDER BY id`, [act.id]));
+}));
+
+router.post('/:id/comments', ah(async (req, res) => {
+  const { act, error } = await scopedActivity(req, req.params.id);
+  if (error) return res.status(error[0]).json({ error: error[1] });
+  const body = String(req.body?.body || '').trim();
+  if (!body) return res.status(400).json({ error: 'Comment text is required' });
+  await q.run(
+    `INSERT INTO activity_comments (activity_id,author_id,author_name,author_role,body,created_at) VALUES (?,?,?,?,?,?)`,
+    [act.id, req.user.id, req.user.name, req.user.sub_role || req.user.role, body, now()]);
+  await audit(req, 'activity.comment', 'activity', act.id, null, { body: body.slice(0, 200) });
+  // Notify the other side so it shows up on their bell.
+  if (req.user.role === 'ho') {
+    await notify(act.proposed_by, 'comment', `${req.user.name} commented on "${act.title}" — please review`, 'activity', act.id);
+  } else {
+    await notifyHO('comment', `${req.user.name} replied on "${act.title}"`, 'activity', act.id);
+  }
+  res.json({ ok: true });
+}));
+
 module.exports = router;
 module.exports.EXPENSE_CATEGORIES = EXPENSE_CATEGORIES;

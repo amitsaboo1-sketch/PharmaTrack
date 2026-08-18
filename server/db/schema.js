@@ -56,6 +56,11 @@ CREATE TABLE IF NOT EXISTS attachments (
   id INTEGER PRIMARY KEY AUTOINCREMENT, activity_id TEXT NOT NULL, kind TEXT DEFAULT 'other',
   filename TEXT NOT NULL, mime TEXT, data_url TEXT, uploaded_by TEXT, uploaded_at TEXT
 );
+CREATE TABLE IF NOT EXISTS activity_comments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, activity_id TEXT NOT NULL, author_id TEXT, author_name TEXT,
+  author_role TEXT, body TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_actcomment ON activity_comments(activity_id);
 CREATE TABLE IF NOT EXISTS sales_batches (
   id INTEGER PRIMARY KEY AUTOINCREMENT, uploaded_by TEXT NOT NULL, uploaded_at TEXT NOT NULL, filename TEXT,
   month TEXT, row_count INTEGER DEFAULT 0, status TEXT DEFAULT 'committed' CHECK (status IN ('committed','rolled_back'))
