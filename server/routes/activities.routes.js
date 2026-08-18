@@ -1,6 +1,6 @@
 const express = require('express');
 const { q } = require('../db/connection');
-const { requireRole } = require('../middleware/auth');
+const { requireRole, requireMarketing } = require('../middleware/auth');
 const { audit, notify, notifyHO } = require('../middleware/audit');
 
 const router = express.Router();
@@ -132,8 +132,8 @@ router.post('/:id/submit', requireRole('sales'), ah(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// ---------- HO decision ----------
-router.post('/:id/decision', requireRole('ho'), ah(async (req, res) => {
+// ---------- Marketing decision (approve / reject / return) ----------
+router.post('/:id/decision', requireMarketing, ah(async (req, res) => {
   const act = await q.get('SELECT * FROM activities WHERE id = ?', [req.params.id]);
   if (!act) return res.status(404).json({ error: 'Activity not found' });
   if (act.status !== 'submitted') return res.status(409).json({ error: 'Only submitted activities can be decided' });

@@ -39,9 +39,20 @@ function requireAdmin(req, res, next) {
   return res.status(403).json({ error: 'Admin access required' });
 }
 
+// Marketing = HO product/marketing managers. Only they can approve/reject activities
+// (Operations/Admin and Finance cannot).
+const MARKETING_ROLES = ['Product Manager', 'Marketing Head'];
+function isMarketing(user) {
+  return !!user && user.role === 'ho' && MARKETING_ROLES.includes(user.sub_role);
+}
+function requireMarketing(req, res, next) {
+  if (isMarketing(req.user)) return next();
+  return res.status(403).json({ error: 'Only Marketing can approve or reject activities' });
+}
+
 // True when the user may see rows belonging to repId.
 function canSeeRep(user, repId) {
   return user.role === 'ho' || user.id === repId;
 }
 
-module.exports = { requireAuth, requireRole, requireAdmin, canSeeRep };
+module.exports = { requireAuth, requireRole, requireAdmin, requireMarketing, isMarketing, MARKETING_ROLES, canSeeRep };

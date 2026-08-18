@@ -48,7 +48,7 @@ const NAV = [
   { route: 'dashboard', label: 'Dashboard', icon: '◧', roles: ['sales', 'ho'] },
   { section: 'Field Operations' },
   { route: 'activities', label: 'Activities', icon: '▤', roles: ['sales', 'ho'] },
-  { route: 'approvals', label: 'Approvals', icon: '✓', roles: ['ho'], badge: 'pending' },
+  { route: 'approvals', label: 'Approvals', icon: '✓', roles: ['marketing'], badge: 'pending' },
   { route: 'mappings', label: 'Doctor–Chemist Map', icon: '⇄', roles: ['sales'] },
   { route: 'daily-allowance', label: 'Daily Allowance', icon: '＄', roles: ['sales', 'ho'], badge: 'da' },
   { route: 'verification', label: 'Field Verification', icon: '☑', roles: ['ho'], badge: 'verify' },
@@ -101,6 +101,7 @@ async function badgeCounts(user) {
 
 function isVisible(item, user) {
   if (item.roles.includes('admin')) return user.role === 'ho' && user.sub_role === 'Admin';
+  if (item.roles.includes('marketing')) return user.role === 'ho' && ['Product Manager', 'Marketing Head'].includes(user.sub_role);
   return item.roles.includes(user.role);
 }
 
