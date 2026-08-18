@@ -37,13 +37,52 @@ function fileUploader(defaultKind = 'photo') {
 
 function attachmentGallery(attachments) {
   if (!attachments.length) return h('div', { class: 'hint' }, 'No photos or documents attached yet.');
-  return h('div', { style: 'display:flex; flex-wrap:wrap; gap:10px;' }, attachments.map((f) => {
+  return h('div', { style: 'display:flex; flex-wrap:wrap; gap:12px;' }, attachments.map((f) => {
     const isImg = f.data_url && /^image\//.test(f.mime || '');
-    if (isImg) return h('a', { href: f.data_url, target: '_blank', title: `${f.filename} (${f.kind})` },
-      h('img', { src: f.data_url, style: 'width:100px;height:100px;object-fit:cover;border-radius:8px;border:1px solid var(--border);' }));
-    if (f.data_url) return h('a', { href: f.data_url, download: f.filename, class: 'btn sm' }, `📄 ${f.filename}`);
-    return h('span', { class: 'btn sm', style: 'opacity:.7;' }, `${f.filename} (${f.kind || 'file'})`);
+    const preview = isImg
+      ? h('a', { href: f.data_url, target: '_blank', title: 'Open full size' },
+          h('img', { src: f.data_url, style: 'width:142px; height:104px; object-fit:cover; display:block; border-bottom:1px solid var(--border);' }))
+      : h('div', { style: 'width:142px; height:104px; display:grid; place-items:center; font-size:40px; border-bottom:1px solid var(--border);' },
+          (f.mime || '').includes('pdf') ? '📄' : '📎');
+    const foot = h('div', { style: 'padding:7px 9px;' },
+      h('div', { style: 'font-size:11px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;', title: f.filename }, f.filename),
+      h('div', { style: 'font-size:10px; color:var(--muted); text-transform:capitalize; margin-bottom:6px;' }, f.kind || 'file'),
+      f.data_url
+        ? h('a', { href: f.data_url, download: f.filename, class: 'btn sm', style: 'display:block; text-align:center;' }, '⬇ Download')
+        : h('span', { class: 'hint', style: 'font-size:10px;' }, 'file not stored'));
+    return h('div', { style: 'width:144px; border:1px solid var(--border); border-radius:8px; overflow:hidden;' }, preview, foot);
   }));
+}
+
+// Build and download a plain-text report of the executed activity: feedback + expense bills + attendees.
+function downloadActivityReport(a) {
+  const money = (n) => (n == null ? '—' : Math.round(Number(n)).toLocaleString('en'));
+  const L = [];
+  L.push('ACTIVITY REPORT');
+  L.push(`${a.title} (${a.id})`);
+  L.push(`Type / Brand:      ${a.type_name || '—'} · ${a.brand_name || '—'}`);
+  L.push(`Owner / Territory: ${a.proposer_name} · ${a.territory}`);
+  L.push(`Planned:           ${a.planned_date || '—'} @ ${a.venue || '—'}`);
+  L.push(`Executed:          ${a.actual_date || '—'} @ ${a.actual_venue || '—'}`);
+  L.push(`Estimated cost:    ${money(a.estimated_cost)}`);
+  L.push(`Actual cost:       ${money(a.actual_cost)}`);
+  L.push('');
+  L.push('FEEDBACK REPORT');
+  L.push(a.completion_remarks || '(none provided)');
+  L.push('');
+  L.push('EXPENSE BREAKUP (BILLS)');
+  (a.expenses || []).forEach((e) => L.push(`  ${(e.category || '').padEnd(22)} ${String(money(e.amount)).padStart(12)}   vendor: ${e.vendor || '-'}   invoice: ${e.invoice_no || '-'}`));
+  L.push(`  ${'TOTAL'.padEnd(22)} ${String(money((a.expenses || []).reduce((s, e) => s + Number(e.amount || 0), 0))).padStart(12)}`);
+  L.push('');
+  L.push('ATTENDEES');
+  (a.participants || []).filter((p) => p.attended).forEach((p) => L.push(`  ${p.name || p.account_id} (${(p.account_type || '').toUpperCase()})`));
+  L.push('');
+  L.push(`Attachments: ${(a.attachments || []).length} file(s) — download each from the activity page.`);
+  const blob = new Blob([L.join('\r\n')], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url; link.download = `${a.id}_activity_report.txt`; link.click();
+  URL.revokeObjectURL(url);
 }
 
 export default async function activityDetailPage(root, id) {
@@ -152,7 +191,9 @@ export default async function activityDetailPage(root, id) {
   if (a.status === 'executed' || a.status === 'closed') {
     root.append(h('div', { class: 'grid cols-2', style: 'margin-top:14px;' },
       h('div', { class: 'card' },
-        h('h3', {}, 'Execution & Feedback Report'),
+        h('div', { style: 'display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;' },
+          h('h3', { style: 'margin:0;' }, 'Execution & Feedback Report'),
+          h('button', { class: 'btn sm', onclick: () => downloadActivityReport(a) }, '⬇ Report')),
         infoRow('Actual date / venue', `${fmtDate(a.actual_date)} @ ${a.actual_venue || '—'}`),
         infoRow('Actual cost', fmtMoney(a.actual_cost)),
         infoRow('Variance', a.estimated_cost ? fmtPct(((a.actual_cost / a.estimated_cost) - 1) * 100) : '—'),
