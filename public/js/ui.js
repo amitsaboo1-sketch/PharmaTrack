@@ -30,6 +30,15 @@ export function h(tag, attrs = {}, ...children) {
 }
 
 const CURRENCY_SYMBOLS = { KES: 'KSh', UGX: 'USh', TZS: 'TSh', RWF: 'FRw', MUR: 'Rs', ZMW: 'ZK', USD: 'US$', INR: '₹' };
+export const currencySymbol = (code) => (code ? (CURRENCY_SYMBOLS[code] || code) : '');
+// Compact money for chart axes/tooltips, e.g. "US$ 12.6k", "KSh 5.8M".
+export const fmtMoneyShort = (n, code) => {
+  if (n == null || !isFinite(n)) return '—';
+  const sym = currencySymbol(code); const abs = Math.abs(n);
+  const s = abs >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : abs >= 1e6 ? (n / 1e6).toFixed(1) + 'M'
+    : abs >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : Math.round(n).toString();
+  return (sym ? sym + ' ' : '') + s;
+};
 // fmtMoney(amount) -> plain number; fmtMoney(amount, 'KES') -> "KSh 12,340"
 export const fmtMoney = (n, currency) => {
   if (n == null || !isFinite(n)) return '—';

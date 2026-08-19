@@ -28,12 +28,12 @@ export default async function roiPage(root) {
     const resp = await api(`/roi/leaderboard?scope=${scope}`);
     const rows = resp.rows || [];
     const cur = resp.currency || 'USD';   // US$ for multi-country viewers; local currency for a sales rep
-    const costLabel = (scope === 'hcp' || scope === 'chemist') ? 'Allocated Cost' : 'Spend';
+    // The value cells carry the currency symbol (e.g. "US$ 1,846" / "KSh 5,800"), so headers stay clean.
     const headers = {
-      hcp: ['Doctor', 'Speciality', 'Activities', `${costLabel} (${cur})`, `Incremental Sales (${cur})`, 'Marketing Effectiveness'],
-      chemist: ['Chemist / Wholesaler', 'Type', 'Activities', `${costLabel} (${cur})`, `Incremental Sales (${cur})`, 'Marketing Effectiveness'],
-      employee: ['Employee', 'Territory', 'Activities', `Spend (${cur})`, `Incremental Sales (${cur})`, 'Marketing Effectiveness'],
-      brand: ['Brand', 'Therapy Area', 'Activities', `Spend (${cur})`, `Incremental Sales (${cur})`, 'Marketing Effectiveness'],
+      hcp: ['Doctor', 'Speciality', 'Activities', 'Allocated Cost', 'Incremental Sales', 'Marketing Effectiveness'],
+      chemist: ['Chemist / Wholesaler', 'Type', 'Activities', 'Allocated Cost', 'Incremental Sales', 'Marketing Effectiveness'],
+      employee: ['Employee', 'Territory', 'Activities', 'Spend', 'Incremental Sales', 'Marketing Effectiveness'],
+      brand: ['Brand', 'Therapy Area', 'Activities', 'Spend', 'Incremental Sales', 'Marketing Effectiveness'],
     }[scope];
     const link = (r) => scope === 'hcp' ? h('a', { href: `#/doctor/${r.key}` }, r.label)
       : scope === 'chemist' ? h('a', { href: `#/chemist/${r.key}` }, r.label) : h('b', {}, r.label);

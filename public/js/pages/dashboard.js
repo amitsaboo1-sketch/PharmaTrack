@@ -1,5 +1,5 @@
 import { api, session } from '../api.js';
-import { h, kpiCard, table, badge, fmtMoney, fmtUnits, fmtPct, fmtDate, chartCanvas, makeChart, colors } from '../ui.js';
+import { h, kpiCard, table, badge, fmtMoney, fmtMoneyShort, currencySymbol, fmtUnits, fmtPct, fmtDate, chartCanvas, makeChart, colors } from '../ui.js';
 
 export default async function dashboardPage(root) {
   const user = session.user;
@@ -17,19 +17,24 @@ function pctCell(p, bold) {
 async function executive(root) {
   const d = await api('/dashboards/executive');
   const c = d.cards;
-  // Cross-country roll-up: every monetary figure below is in the reporting currency (US$),
-  // converted from each country's local currency. Per-country pages keep their own currency.
+  // Cross-country roll-up: every monetary figure is in the reporting currency (US$), converted
+  // from each country's local currency. The value itself carries the symbol, so we don't repeat
+  // the currency name on every label. Per-country pages keep their own currency.
   const cur = d.reportingCurrency || 'USD';
+  const sym = currencySymbol(cur);
+  const money = (v) => fmtMoney(v, cur);            // e.g. "US$ 5,567"
+  const moneyAxis = { ticks: { callback: (v) => fmtMoneyShort(v, cur) } };
+  const moneyTip = { callbacks: { label: (ctx) => `${ctx.dataset.label ? ctx.dataset.label + ': ' : ''}${money(ctx.parsed.y ?? ctx.parsed)}` } };
 
   root.append(
     h('div', { class: 'grid cards-4' },
-      kpiCard(`Total Spend (executed) · ${cur}`, fmtMoney(c.totalSpend, cur),
+      kpiCard('Total Spend (executed)', money(c.totalSpend),
         c.budgetUtilizationPct != null ? `${c.budgetUtilizationPct.toFixed(0)}% of planned budget` : ''),
       kpiCard('Activities', String(c.activities), `${c.completed} completed`),
       kpiCard('Pending Approvals', String(c.pendingApprovals), c.pendingApprovals ? 'Action needed' : 'All clear', c.pendingApprovals ? 'down' : 'up'),
-      kpiCard('Blended Marketing Effectiveness', fmtPct(c.blendedRoiPct), `Incremental sales ${fmtMoney(c.incrementalSales, cur)}`, (c.blendedRoiPct ?? 0) >= 0 ? 'up' : 'down')));
+      kpiCard('Blended Marketing Effectiveness', fmtPct(c.blendedRoiPct), `Incremental sales ${money(c.incrementalSales)}`, (c.blendedRoiPct ?? 0) >= 0 ? 'up' : 'down')));
   root.append(h('div', { class: 'hint', style: 'margin-top:8px;' },
-    `All monetary figures on this dashboard are consolidated in ${cur} (converted from each country's local currency at reference rates). Country pages show local currency.`));
+    `Figures consolidated in ${sym} across all countries. Country pages show local currency.`));
 
   const spendCanvas = chartCanvas();
   const typeCanvas = chartCanvas();
@@ -37,7 +42,7 @@ async function executive(root) {
 
   root.append(h('div', { class: 'grid cols-3-1', style: 'margin-top:14px;' },
     h('div', { class: 'card' },
-      h('h3', {}, `Monthly Marketing Spend vs Total Sales (${cur})`),
+      h('h3', {}, 'Monthly Marketing Spend vs Total Sales'),
       h('div', { class: 'chart-box' }, spendCanvas)),
     h('div', { class: 'card' },
       h('h3', {}, `Pending Approvals (${d.pendingList.length})`),
@@ -45,12 +50,12 @@ async function executive(root) {
         ? d.pendingList.map((p) => h('div', { style: 'padding:8px 0; border-bottom:1px solid #f1f2f4;' },
             h('div', { style: 'font-weight:600; font-size:13px;' }, p.title),
             h('div', { class: 'sub', style: 'color:var(--muted); font-size:12px;' },
-              `${p.proposer_name} · ${p.type_name} · ${fmtMoney(p.estimated_cost, cur)} · ${fmtDate(p.planned_date)}`),
+              `${p.proposer_name} · ${p.type_name} · ${money(p.estimated_cost)} · ${fmtDate(p.planned_date)}`),
             h('button', { class: 'btn sm primary', style: 'margin-top:6px;', onclick: () => (location.hash = `#/activity/${p.id}`) }, 'Review')))
         : h('div', { class: 'empty' }, 'Nothing pending 🎉'))));
 
   root.append(h('div', { class: 'grid cols-2', style: 'margin-top:14px;' },
-    h('div', { class: 'card' }, h('h3', {}, `Spend by Activity Type (${cur})`), h('div', { class: 'chart-box sm' }, typeCanvas)),
+    h('div', { class: 'card' }, h('h3', {}, 'Spend by Activity Type'), h('div', { class: 'chart-box sm' }, typeCanvas)),
     h('div', { class: 'card' }, h('h3', {}, 'Marketing Effectiveness by Brand'), h('div', { class: 'chart-box sm' }, brandCanvas))));
 
   // ----- East Africa pool: consolidated performance per country (value; YoY), each own currency -----
@@ -70,8 +75,8 @@ async function executive(root) {
 
   root.append(h('div', { class: 'card', style: 'margin-top:14px;' },
     h('h3', {}, 'Rep Performance Leaderboard (marketing effectiveness)'),
-    table(['Representative', 'Country', 'Activities', `Spend (${cur})`, `Incremental Sales (${cur})`, 'Marketing Effectiveness'],
-      d.repRoi.map((r) => [r.label, r.sublabel, String(r.activities), fmtMoney(r.cost, cur), fmtMoney(r.incremental, cur),
+    table(['Representative', 'Country', 'Activities', 'Spend', 'Incremental Sales', 'Marketing Effectiveness'],
+      d.repRoi.map((r) => [r.label, r.sublabel, String(r.activities), money(r.cost), money(r.incremental),
         h('b', { style: `color:${(r.roiPct ?? 0) >= 0 ? 'var(--accent)' : 'var(--danger)'}` }, fmtPct(r.roiPct))]))));
 
   const months = [...new Set([...d.monthlySpend.map((m) => m.month), ...d.monthlySales.map((m) => m.month)])].sort();
@@ -79,10 +84,14 @@ async function executive(root) {
     data: { labels: months, datasets: [
       { type: 'bar', label: 'Marketing spend', data: months.map((m) => d.monthlySpend.find((x) => x.month === m)?.spend || 0), backgroundColor: '#4f46e5', borderRadius: 5, yAxisID: 'y1' },
       { type: 'line', label: 'Total sales', data: months.map((m) => d.monthlySales.find((x) => x.month === m)?.sales || 0), borderColor: '#059669', backgroundColor: '#059669', tension: .35, yAxisID: 'y' }] },
-    options: { scales: { y: { position: 'left' }, y1: { position: 'right', grid: { drawOnChartArea: false } } } },
+    options: {
+      scales: { y: { position: 'left', ...moneyAxis }, y1: { position: 'right', grid: { drawOnChartArea: false }, ...moneyAxis } },
+      plugins: { tooltip: moneyTip },
+    },
   });
   makeChart(typeCanvas, { type: 'doughnut',
-    data: { labels: d.spendByType.map((x) => x.type), datasets: [{ data: d.spendByType.map((x) => x.spend), backgroundColor: colors(d.spendByType.length) }] } });
+    data: { labels: d.spendByType.map((x) => x.type), datasets: [{ data: d.spendByType.map((x) => x.spend), backgroundColor: colors(d.spendByType.length) }] },
+    options: { plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${money(ctx.parsed)}` } } } } });
   makeChart(brandCanvas, { type: 'bar',
     data: { labels: d.brandRoi.map((b) => b.label), datasets: [{ label: 'Marketing Effectiveness %', data: d.brandRoi.map((b) => b.roiPct), backgroundColor: d.brandRoi.map((b) => (b.roiPct ?? 0) >= 0 ? '#059669' : '#dc2626'), borderRadius: 5 }] },
     options: { plugins: { legend: { display: false } } } });
