@@ -162,6 +162,7 @@ test('critical path', async () => {
   const dash = await call('/dashboards/executive', { token: ho });
   assert.equal(dash.status, 200);
   assert.ok(dash.data.cards.activities >= 4);
+  assert.equal(dash.data.reportingCurrency, 'USD'); // cross-country roll-up consolidated in US$
   // Country Manager sees the all-country executive dashboard + pool too (not just HO).
   const cmDash = await call('/dashboards/executive', { token: cm });
   assert.equal(cmDash.status, 200);
@@ -199,7 +200,8 @@ test('critical path', async () => {
 
   const chemBoard = await call('/roi/leaderboard?scope=chemist', { token: ho });
   assert.equal(chemBoard.status, 200);
-  assert.ok(chemBoard.data.length >= 1);
+  assert.ok(chemBoard.data.rows.length >= 1);
+  assert.equal(chemBoard.data.currency, 'USD'); // HO spans countries -> consolidated in US$
 
   const chemProfile = await call('/chemists/CHEM005/profile', { token: ho });
   assert.equal(chemProfile.status, 200);

@@ -145,8 +145,20 @@ function executedActivities(where = '', params = []) {
   return q.all(`SELECT * FROM activities WHERE status IN ('executed','closed') ${where ? 'AND ' + where : ''}`, params);
 }
 
-async function leaderboard(scope, repFilter = null) {
+// `usd:true` converts each activity's money to US$ (via its country rate) before aggregating, so
+// leaderboards that mix countries are comparable. Money-independent ratios (roiPct) are unaffected.
+async function leaderboard(scope, repFilter = null, { usd = false } = {}) {
   const acts = repFilter ? await executedActivities('proposed_by = ?', [repFilter]) : await executedActivities();
+  const rateCache = new Map();
+  const rateOf = async (country) => {
+    if (!usd) return 1;
+    if (!country) return 1;
+    if (!rateCache.has(country)) {
+      const c = await q.get('SELECT usd_rate FROM countries WHERE code = ?', [country]);
+      rateCache.set(country, (c && c.usd_rate) || 1);
+    }
+    return rateCache.get(country);
+  };
   const buckets = new Map();
   const bump = (key, label, sublabel, cost, incremental, hasData) => {
     if (!buckets.has(key)) buckets.set(key, { key, label, sublabel, cost: 0, incremental: 0, activities: 0, dataPoints: 0 });
@@ -156,8 +168,9 @@ async function leaderboard(scope, repFilter = null) {
 
   for (const act of acts) {
     const roi = await computeActivityROI(act.id);
-    const cost = act.actual_cost || 0;
-    const inc = roi && roi.available ? roi.incremental : 0;
+    const rate = await rateOf(act.country);
+    const cost = (act.actual_cost || 0) / rate;
+    const inc = (roi && roi.available ? roi.incremental : 0) / rate;
     const has = !!(roi && roi.available);
     if (scope === 'employee') {
       const u = await q.get('SELECT name, territory FROM users WHERE id = ?', [act.proposed_by]);
@@ -166,9 +179,9 @@ async function leaderboard(scope, repFilter = null) {
       const b = await q.get('SELECT name, therapy_area FROM brands WHERE id = ?', [act.brand_id]);
       bump(act.brand_id || '—', b ? b.name : act.brand_id || 'Unassigned', b ? b.therapy_area : '', cost, inc, has);
     } else if (scope === 'hcp') {
-      for (const d of (roi && roi.perDoctor) || []) bump(d.hcpId, d.name, d.speciality, d.allocatedCost, d.incremental, d.hasPostData);
+      for (const d of (roi && roi.perDoctor) || []) bump(d.hcpId, d.name, d.speciality, d.allocatedCost / rate, d.incremental / rate, d.hasPostData);
     } else if (scope === 'chemist') {
-      for (const c of (roi && roi.perChemist) || []) bump(c.chemistId, c.name, c.type, c.allocatedCost, c.incremental, c.hasPostData);
+      for (const c of (roi && roi.perChemist) || []) bump(c.chemistId, c.name, c.type, c.allocatedCost / rate, c.incremental / rate, c.hasPostData);
     }
   }
 

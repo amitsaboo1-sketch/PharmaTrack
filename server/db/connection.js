@@ -63,6 +63,15 @@ async function migrate() {
   }
   try { await client.execute(`ALTER TABLE daily_allowances ADD COLUMN approval_stage TEXT`); } catch { /* exists */ }
 
+  // Per-country USD conversion rate (local units per 1 US$), for cross-country roll-ups.
+  try { await client.execute(`ALTER TABLE countries ADD COLUMN usd_rate REAL DEFAULT 1`); } catch { /* exists */ }
+  try {
+    const RATES = { KE: 130, UG: 3700, TZ: 2500, RW: 1300, MU: 46, ZM: 27 };
+    for (const [code, rate] of Object.entries(RATES)) {
+      await client.execute({ sql: `UPDATE countries SET usd_rate = ? WHERE code = ?`, args: [rate, code] });
+    }
+  } catch (e) { console.error('usd_rate backfill:', e && e.message); }
+
   // Relax users.role CHECK to allow clm/cm (SQLite can't ALTER a CHECK — recreate the table once).
   try {
     const info = await client.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'");

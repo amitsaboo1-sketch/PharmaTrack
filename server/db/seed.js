@@ -125,8 +125,8 @@ async function seedIfEmpty(q) {
   const stmts = [];
   const add = (sql, rows) => rows.forEach((r) => stmts.push({ sql, args: r }));
 
-  add(`INSERT INTO countries (code,name,currency_code,currency_symbol,region) VALUES (?,?,?,?, 'East Africa Pool')`,
-    COUNTRIES.map((c) => [c[0], c[1], c[2], c[3]]));
+  add(`INSERT INTO countries (code,name,currency_code,currency_symbol,region,usd_rate) VALUES (?,?,?,?, 'East Africa Pool', ?)`,
+    COUNTRIES.map((c) => [c[0], c[1], c[2], c[3], c[5]]));   // c[5] = local units per US$
 
   add(`INSERT INTO users (id,name,email,password_hash,role,sub_role,territory,region,country) VALUES (?,?,?,?,?,?,?,?,?)`, [
     ['EMP001', 'James Mwangi', 'kenya@pharos.demo', hash, 'sales', 'Medical Representative', 'Kenya', 'East Africa Pool', 'KE'],

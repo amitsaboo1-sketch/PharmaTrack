@@ -29,7 +29,7 @@ export function h(tag, attrs = {}, ...children) {
   return el;
 }
 
-const CURRENCY_SYMBOLS = { KES: 'KSh', UGX: 'USh', TZS: 'TSh', RWF: 'FRw', MUR: 'Rs', ZMW: 'ZK', USD: '$', INR: '₹' };
+const CURRENCY_SYMBOLS = { KES: 'KSh', UGX: 'USh', TZS: 'TSh', RWF: 'FRw', MUR: 'Rs', ZMW: 'ZK', USD: 'US$', INR: '₹' };
 // fmtMoney(amount) -> plain number; fmtMoney(amount, 'KES') -> "KSh 12,340"
 export const fmtMoney = (n, currency) => {
   if (n == null || !isFinite(n)) return '—';

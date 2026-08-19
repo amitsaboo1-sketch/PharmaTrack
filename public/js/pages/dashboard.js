@@ -17,14 +17,19 @@ function pctCell(p, bold) {
 async function executive(root) {
   const d = await api('/dashboards/executive');
   const c = d.cards;
+  // Cross-country roll-up: every monetary figure below is in the reporting currency (US$),
+  // converted from each country's local currency. Per-country pages keep their own currency.
+  const cur = d.reportingCurrency || 'USD';
 
   root.append(
     h('div', { class: 'grid cards-4' },
-      kpiCard('Total Spend (executed)', fmtMoney(c.totalSpend),
+      kpiCard(`Total Spend (executed) · ${cur}`, fmtMoney(c.totalSpend, cur),
         c.budgetUtilizationPct != null ? `${c.budgetUtilizationPct.toFixed(0)}% of planned budget` : ''),
       kpiCard('Activities', String(c.activities), `${c.completed} completed`),
       kpiCard('Pending Approvals', String(c.pendingApprovals), c.pendingApprovals ? 'Action needed' : 'All clear', c.pendingApprovals ? 'down' : 'up'),
-      kpiCard('Blended Marketing Effectiveness', fmtPct(c.blendedRoiPct), `Incremental sales ${fmtMoney(c.incrementalSales)}`, (c.blendedRoiPct ?? 0) >= 0 ? 'up' : 'down')));
+      kpiCard('Blended Marketing Effectiveness', fmtPct(c.blendedRoiPct), `Incremental sales ${fmtMoney(c.incrementalSales, cur)}`, (c.blendedRoiPct ?? 0) >= 0 ? 'up' : 'down')));
+  root.append(h('div', { class: 'hint', style: 'margin-top:8px;' },
+    `All monetary figures on this dashboard are consolidated in ${cur} (converted from each country's local currency at reference rates). Country pages show local currency.`));
 
   const spendCanvas = chartCanvas();
   const typeCanvas = chartCanvas();
@@ -32,7 +37,7 @@ async function executive(root) {
 
   root.append(h('div', { class: 'grid cols-3-1', style: 'margin-top:14px;' },
     h('div', { class: 'card' },
-      h('h3', {}, 'Monthly Marketing Spend vs Total Sales'),
+      h('h3', {}, `Monthly Marketing Spend vs Total Sales (${cur})`),
       h('div', { class: 'chart-box' }, spendCanvas)),
     h('div', { class: 'card' },
       h('h3', {}, `Pending Approvals (${d.pendingList.length})`),
@@ -40,12 +45,12 @@ async function executive(root) {
         ? d.pendingList.map((p) => h('div', { style: 'padding:8px 0; border-bottom:1px solid #f1f2f4;' },
             h('div', { style: 'font-weight:600; font-size:13px;' }, p.title),
             h('div', { class: 'sub', style: 'color:var(--muted); font-size:12px;' },
-              `${p.proposer_name} · ${p.type_name} · ${fmtMoney(p.estimated_cost)} · ${fmtDate(p.planned_date)}`),
+              `${p.proposer_name} · ${p.type_name} · ${fmtMoney(p.estimated_cost, cur)} · ${fmtDate(p.planned_date)}`),
             h('button', { class: 'btn sm primary', style: 'margin-top:6px;', onclick: () => (location.hash = `#/activity/${p.id}`) }, 'Review')))
         : h('div', { class: 'empty' }, 'Nothing pending 🎉'))));
 
   root.append(h('div', { class: 'grid cols-2', style: 'margin-top:14px;' },
-    h('div', { class: 'card' }, h('h3', {}, 'Spend by Activity Type'), h('div', { class: 'chart-box sm' }, typeCanvas)),
+    h('div', { class: 'card' }, h('h3', {}, `Spend by Activity Type (${cur})`), h('div', { class: 'chart-box sm' }, typeCanvas)),
     h('div', { class: 'card' }, h('h3', {}, 'Marketing Effectiveness by Brand'), h('div', { class: 'chart-box sm' }, brandCanvas))));
 
   // ----- East Africa pool: consolidated performance per country (value; YoY), each own currency -----
@@ -65,8 +70,8 @@ async function executive(root) {
 
   root.append(h('div', { class: 'card', style: 'margin-top:14px;' },
     h('h3', {}, 'Rep Performance Leaderboard (marketing effectiveness)'),
-    table(['Representative', 'Country', 'Activities', 'Spend', 'Incremental Sales', 'Marketing Effectiveness'],
-      d.repRoi.map((r) => [r.label, r.sublabel, String(r.activities), fmtMoney(r.cost), fmtMoney(r.incremental),
+    table(['Representative', 'Country', 'Activities', `Spend (${cur})`, `Incremental Sales (${cur})`, 'Marketing Effectiveness'],
+      d.repRoi.map((r) => [r.label, r.sublabel, String(r.activities), fmtMoney(r.cost, cur), fmtMoney(r.incremental, cur),
         h('b', { style: `color:${(r.roiPct ?? 0) >= 0 ? 'var(--accent)' : 'var(--danger)'}` }, fmtPct(r.roiPct))]))));
 
   const months = [...new Set([...d.monthlySpend.map((m) => m.month), ...d.monthlySales.map((m) => m.month)])].sort();

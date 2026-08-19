@@ -50,54 +50,74 @@ router.get('/roi/activity/:id', ah(async (req, res) => {
 
 router.get('/roi/leaderboard', ah(async (req, res) => {
   const scope = ['hcp', 'chemist', 'employee', 'brand'].includes(req.query.scope) ? req.query.scope : 'hcp';
-  const repFilter = req.user.role === 'sales' ? req.user.id : null;
-  res.json(await leaderboard(scope, repFilter));
+  const isSales = req.user.role === 'sales';
+  const repFilter = isSales ? req.user.id : null;
+  // A sales rep sees only their own country → keep local currency. Anyone who spans multiple
+  // countries (HO / CM / CLM) gets figures consolidated in US$.
+  const rows = await leaderboard(scope, repFilter, { usd: !isSales });
+  let currency = 'USD';
+  if (isSales && req.user.country) {
+    const c = await q.get('SELECT currency_code FROM countries WHERE code = ?', [req.user.country]);
+    currency = (c && c.currency_code) || 'USD';
+  }
+  res.json({ rows, currency });
 }));
 
 // ---------- Executive dashboard (HO) ----------
 router.get('/dashboards/executive', requireRole('ho', 'cm'), ah(async (req, res) => {
+  // This view rolls up across all six countries, each with a different currency, so every
+  // monetary figure is converted to a single reporting currency (US$) via each row's country
+  // rate (activities by activity.country; sales by the rep's country). Per-country pages keep
+  // their own local currency. R = local-per-USD; dividing local amounts by R gives US$.
   const totals = await q.get(
     `SELECT COUNT(*) AS activities,
-            SUM(CASE WHEN status='submitted' THEN 1 ELSE 0 END) AS pending,
-            SUM(CASE WHEN status IN ('executed','closed') THEN 1 ELSE 0 END) AS completed,
-            COALESCE(SUM(CASE WHEN status IN ('executed','closed') THEN actual_cost ELSE 0 END),0) AS actual_spend,
-            COALESCE(SUM(estimated_cost),0) AS planned_budget
-     FROM activities`);
+            SUM(CASE WHEN a.status='submitted' THEN 1 ELSE 0 END) AS pending,
+            SUM(CASE WHEN a.status IN ('executed','closed') THEN 1 ELSE 0 END) AS completed,
+            COALESCE(SUM(CASE WHEN a.status IN ('executed','closed') THEN a.actual_cost/COALESCE(c.usd_rate,1) ELSE 0 END),0) AS actual_spend,
+            COALESCE(SUM(a.estimated_cost/COALESCE(c.usd_rate,1)),0) AS planned_budget
+     FROM activities a LEFT JOIN countries c ON c.code = a.country`);
 
   const monthlySpend = await q.all(
-    `SELECT substr(actual_date,1,7) AS month, SUM(actual_cost) AS spend
-     FROM activities WHERE status IN ('executed','closed') AND actual_date IS NOT NULL
+    `SELECT substr(a.actual_date,1,7) AS month, SUM(a.actual_cost/COALESCE(c.usd_rate,1)) AS spend
+     FROM activities a LEFT JOIN countries c ON c.code = a.country
+     WHERE a.status IN ('executed','closed') AND a.actual_date IS NOT NULL
      GROUP BY month ORDER BY month`);
 
   const monthlySales = await q.all(
-    `SELECT s.month, SUM(s.sales_value) AS sales
+    `SELECT s.month, SUM(s.sales_value/COALESCE(c.usd_rate,1)) AS sales
      FROM sales_data s JOIN sales_batches b ON b.id=s.batch_id AND b.status='committed'
+     LEFT JOIN users u ON u.id = s.employee_id LEFT JOIN countries c ON c.code = u.country
      GROUP BY s.month ORDER BY s.month`);
 
   const spendByType = await q.all(
-    `SELECT t.name AS type, SUM(a.actual_cost) AS spend
-     FROM activities a JOIN activity_types t ON t.id = a.type_id
+    `SELECT t.name AS type, SUM(a.actual_cost/COALESCE(c.usd_rate,1)) AS spend
+     FROM activities a JOIN activity_types t ON t.id = a.type_id LEFT JOIN countries c ON c.code = a.country
      WHERE a.status IN ('executed','closed') GROUP BY t.name ORDER BY spend DESC`);
 
   const pendingList = await q.all(
-    `SELECT a.id, a.title, a.estimated_cost, a.planned_date, u.name AS proposer_name, t.name AS type_name
+    `SELECT a.id, a.title, a.estimated_cost/COALESCE(c.usd_rate,1) AS estimated_cost, a.planned_date,
+            u.name AS proposer_name, t.name AS type_name, a.country
      FROM activities a LEFT JOIN users u ON u.id=a.proposed_by LEFT JOIN activity_types t ON t.id=a.type_id
+     LEFT JOIN countries c ON c.code = a.country
      WHERE a.status='submitted' ORDER BY a.created_at`);
 
-  const brandRoi = await leaderboard('brand');
-  const repRoi = await leaderboard('employee');
+  const brandRoi = await leaderboard('brand', null, { usd: true });
+  const repRoi = await leaderboard('employee', null, { usd: true });
 
-  // Blended ROI across executed activities with data.
+  // Blended ROI across executed activities with data — each activity converted to US$ first.
   const margin = (await cfgNum('gross_margin_pct', 70)) / 100;
   let cost = 0, incremental = 0, dataPoints = 0;
-  for (const a of await q.all(`SELECT id FROM activities WHERE status IN ('executed','closed')`)) {
+  for (const a of await q.all(
+    `SELECT a.id, COALESCE(c.usd_rate,1) AS rate FROM activities a LEFT JOIN countries c ON c.code = a.country
+     WHERE a.status IN ('executed','closed')`)) {
     const r = await computeActivityROI(a.id);
-    if (r && r.available) { cost += r.cost; incremental += r.incremental; dataPoints++; }
+    if (r && r.available) { cost += r.cost / a.rate; incremental += r.incremental / a.rate; dataPoints++; }
   }
   const blendedRoiPct = cost > 0 && dataPoints > 0 ? ((incremental * margin - cost) / cost) * 100 : null;
 
   const totalSales = monthlySales.reduce((s, m) => s + m.sales, 0);
   res.json({
+    reportingCurrency: 'USD',
     cards: {
       totalSpend: totals.actual_spend,
       plannedBudget: totals.planned_budget,

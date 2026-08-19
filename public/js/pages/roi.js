@@ -25,19 +25,22 @@ export default async function roiPage(root) {
 
   async function load() {
     renderTabs();
-    const rows = await api(`/roi/leaderboard?scope=${scope}`);
+    const resp = await api(`/roi/leaderboard?scope=${scope}`);
+    const rows = resp.rows || [];
+    const cur = resp.currency || 'USD';   // US$ for multi-country viewers; local currency for a sales rep
+    const costLabel = (scope === 'hcp' || scope === 'chemist') ? 'Allocated Cost' : 'Spend';
     const headers = {
-      hcp: ['Doctor', 'Speciality', 'Activities', 'Allocated Cost', 'Incremental Sales', 'Marketing Effectiveness'],
-      chemist: ['Chemist / Wholesaler', 'Type', 'Activities', 'Allocated Cost', 'Incremental Sales', 'Marketing Effectiveness'],
-      employee: ['Employee', 'Territory', 'Activities', 'Spend', 'Incremental Sales', 'Marketing Effectiveness'],
-      brand: ['Brand', 'Therapy Area', 'Activities', 'Spend', 'Incremental Sales', 'Marketing Effectiveness'],
+      hcp: ['Doctor', 'Speciality', 'Activities', `${costLabel} (${cur})`, `Incremental Sales (${cur})`, 'Marketing Effectiveness'],
+      chemist: ['Chemist / Wholesaler', 'Type', 'Activities', `${costLabel} (${cur})`, `Incremental Sales (${cur})`, 'Marketing Effectiveness'],
+      employee: ['Employee', 'Territory', 'Activities', `Spend (${cur})`, `Incremental Sales (${cur})`, 'Marketing Effectiveness'],
+      brand: ['Brand', 'Therapy Area', 'Activities', `Spend (${cur})`, `Incremental Sales (${cur})`, 'Marketing Effectiveness'],
     }[scope];
     const link = (r) => scope === 'hcp' ? h('a', { href: `#/doctor/${r.key}` }, r.label)
       : scope === 'chemist' ? h('a', { href: `#/chemist/${r.key}` }, r.label) : h('b', {}, r.label);
     box.innerHTML = '';
     box.append(h('div', { class: 'card' },
       table(headers, rows.map((r) => [
-        link(r), r.sublabel || '—', String(r.activities), fmtMoney(r.cost), fmtMoney(r.incremental),
+        link(r), r.sublabel || '—', String(r.activities), fmtMoney(r.cost, cur), fmtMoney(r.incremental, cur),
         r.roiPct == null
           ? h('span', { class: 'hint' }, 'insufficient data')
           : h('b', { style: `color:${r.roiPct >= 0 ? 'var(--accent)' : 'var(--danger)'}` }, fmtPct(r.roiPct)),

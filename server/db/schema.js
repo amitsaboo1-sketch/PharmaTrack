@@ -98,7 +98,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS countries (
   code TEXT PRIMARY KEY, name TEXT NOT NULL, currency_code TEXT NOT NULL, currency_symbol TEXT NOT NULL,
-  region TEXT DEFAULT 'East Africa Pool', active INTEGER DEFAULT 1
+  region TEXT DEFAULT 'East Africa Pool', active INTEGER DEFAULT 1,
+  usd_rate REAL DEFAULT 1   -- local-currency units per 1 US$, for cross-country roll-ups
 );
 CREATE TABLE IF NOT EXISTS country_targets (
   country_code TEXT NOT NULL, month TEXT NOT NULL, brand_id TEXT NOT NULL,
