@@ -50,7 +50,7 @@ const NAV = [
   { route: 'activities', label: 'Activities', icon: '▤', roles: ['sales', 'ho', 'clm', 'cm'] },
   { route: 'approvals', label: 'Approvals', icon: '✓', roles: ['clm', 'cm', 'marketing'], badge: 'pending' },
   { route: 'mappings', label: 'Doctor–Chemist Map', icon: '⇄', roles: ['sales'] },
-  { route: 'daily-allowance', label: 'Daily Allowance', icon: '＄', roles: ['sales', 'ho', 'clm', 'cm'], badge: 'da' },
+  { route: 'daily-allowance', label: 'Daily Allowance', icon: '＄', roles: ['sales', 'admin', 'clm', 'cm'], badge: 'da' },
   { route: 'verification', label: 'Field Verification', icon: '☑', roles: ['clm', 'cm', 'marketing', 'admin'], badge: 'verify' },
   { section: 'Master Data' },
   { route: 'doctors', label: 'Doctors (HCP)', icon: '⚕', roles: ['sales', 'ho', 'clm', 'cm'] },

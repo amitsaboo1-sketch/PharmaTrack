@@ -9,7 +9,7 @@ const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch
 
 // ---------- Country performance (consolidated targets vs achievement) ----------
 // Sales users are scoped to their own country; HO can query any / the whole pool.
-router.get('/performance/pool', requireRole('ho'), ah(async (req, res) => res.json(await poolOverview())));
+router.get('/performance/pool', requireRole('ho', 'cm'), ah(async (req, res) => res.json(await poolOverview())));
 
 function scopeCountry(req, res, code) {
   if (req.user.role === 'sales' && req.user.country !== code) {
@@ -55,7 +55,7 @@ router.get('/roi/leaderboard', ah(async (req, res) => {
 }));
 
 // ---------- Executive dashboard (HO) ----------
-router.get('/dashboards/executive', requireRole('ho'), ah(async (req, res) => {
+router.get('/dashboards/executive', requireRole('ho', 'cm'), ah(async (req, res) => {
   const totals = await q.get(
     `SELECT COUNT(*) AS activities,
             SUM(CASE WHEN status='submitted' THEN 1 ELSE 0 END) AS pending,
@@ -199,7 +199,7 @@ function toCSV(rows) {
 }
 
 // Data/report file downloads are HO-only. Field reps consume reports on-portal only.
-router.get('/reports/:name.csv', requireRole('ho'), ah(async (req, res) => {
+router.get('/reports/:name.csv', requireRole('ho', 'cm'), ah(async (req, res) => {
   const salesScope = req.user.role === 'sales';
   const rep = req.user.id;
   let rows = [];

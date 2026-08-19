@@ -162,6 +162,12 @@ test('critical path', async () => {
   const dash = await call('/dashboards/executive', { token: ho });
   assert.equal(dash.status, 200);
   assert.ok(dash.data.cards.activities >= 4);
+  // Country Manager sees the all-country executive dashboard + pool too (not just HO).
+  const cmDash = await call('/dashboards/executive', { token: cm });
+  assert.equal(cmDash.status, 200);
+  const cmPool = await call('/performance/pool', { token: cm });
+  assert.equal(cmPool.status, 200);
+  assert.equal(cmPool.data.length, 6);
 
   // 9. country performance: consolidated targets vs achievement, units + value
   const perf = await call('/performance/country/KE', { token: ho });

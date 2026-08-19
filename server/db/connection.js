@@ -1,7 +1,7 @@
 const { createClient } = require('@libsql/client');
 const { DB_URL, DB_AUTH_TOKEN } = require('../config');
 const { SCHEMA_SQL } = require('./schema');
-const { seedIfEmpty, ensureManagementUsers } = require('./seed');
+const { seedIfEmpty, ensureManagementUsers, ensureDemoApprovals } = require('./seed');
 
 const client = createClient(DB_AUTH_TOKEN ? { url: DB_URL, authToken: DB_AUTH_TOKEN } : { url: DB_URL });
 
@@ -107,6 +107,8 @@ function ready() {
       // Runs on every boot (after migrate relaxed the role CHECK) so pre-existing
       // databases gain the CLM/CM users without a full reseed. No-op once present.
       await ensureManagementUsers(q);
+      // Demo pending/approved items spread across every approval stage. No-op once present.
+      await ensureDemoApprovals(q);
     })().catch((err) => { initPromise = null; throw err; });
   }
   return initPromise;

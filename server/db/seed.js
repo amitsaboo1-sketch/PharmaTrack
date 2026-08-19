@@ -26,6 +26,75 @@ async function ensureManagementUsers(q) {
   }
 }
 
+// Populate the approval queues with demo items spread across every stage of every chain, so
+// each panel (Approvals, Field Verification, Daily Allowance) shows realistic pending + approved
+// work when logging in as a CLM / CM / Marketing / Admin. Runs once per database (guarded by a
+// marker activity) so it also back-fills pre-existing local + Turso databases.
+async function ensureDemoApprovals(q) {
+  const marker = await q.get("SELECT 1 AS x FROM activities WHERE id = 'DMA1'");
+  if (marker) return;
+  const now = new Date().toISOString();
+
+  // --- Activities across the SER -> CLM -> CM -> Marketing chain ---
+  const A = (id, title, rep, terr, country, stage, status) => q.run(
+    `INSERT OR IGNORE INTO activities
+       (id,title,objective,remarks,type_id,brand_id,product_id,proposed_by,territory,country,
+        planned_date,venue,estimated_cost,expected_hcp_count,expected_sales,status,approval_stage,created_at,updated_at)
+     VALUES (?,?,?,'', 'CME','BR01','PR01', ?,?,?, '2026-09-15','City Hotel', ?, ?, ?, ?, ?, ?, ?)`,
+    [id, title, 'Demo activity for the approval walkthrough', rep, terr, country, 8000, 12, 40000, status, stage, now, now]);
+  await A('DMA1', 'Nairobi Cardiology CME', 'EMP001', 'Kenya', 'KE', 'clm', 'submitted');       // awaiting CLM (Kenya)
+  await A('DMA2', 'Mombasa Diabetes Round Table', 'EMP001', 'Kenya', 'KE', 'cm', 'submitted');  // awaiting CM
+  await A('DMA3', 'Kampala Oncology Symposium', 'EMP002', 'Uganda', 'UG', 'marketing', 'submitted'); // awaiting Marketing
+  await A('DMA4', 'Dar Cardiology Screening Camp', 'EMP003', 'Tanzania', 'TZ', 'cm', 'submitted');
+  await A('DMA5', 'Kigali Product Launch', 'EMP004', 'Rwanda', 'RW', 'clm', 'submitted');
+  await A('DMA6', 'Lusaka Chemist Promotion', 'EMP006', 'Zambia', 'ZM', null, 'approved');       // fully approved
+  for (const [act, hcp] of [['DMA1', 'HCP001'], ['DMA2', 'HCP001'], ['DMA3', 'HCP003'], ['DMA4', 'HCP005']]) {
+    await q.run(`INSERT OR IGNORE INTO activity_participants (activity_id,account_id,account_type,proposed,invited) VALUES (?,?, 'hcp',1,1)`, [act, hcp]);
+  }
+
+  // --- Daily allowance across SER -> CLM -> CM -> Admin ---
+  const D = (rep, cc, cur, loc, stage, status) => q.run(
+    `INSERT INTO daily_allowances (user_id,country_code,currency_code,da_date,location,purpose,da_amount,status,approval_stage,created_at)
+     VALUES (?,?,?, '2026-08-10', ?, 'Field visits & chemist calls', 3500, ?, ?, ?)`,
+    [rep, cc, cur, loc, status, stage, now]);
+  await D('EMP001', 'KE', 'KES', 'Thika', 'clm', 'submitted');    // awaiting CLM (Kenya)
+  await D('EMP002', 'UG', 'UGX', 'Entebbe', 'cm', 'submitted');   // awaiting CM
+  await D('EMP003', 'TZ', 'TZS', 'Arusha', 'admin', 'submitted'); // awaiting Admin
+  await D('EMP004', 'RW', 'RWF', 'Musanze', null, 'approved');    // fully approved
+
+  // Normalize legacy flag inconsistencies so each pending account sits at exactly ONE stage.
+  // (Accounts created under the old 2-stage model can have mkt_verified=1 while clm_ok/cm_ok are
+  // still 0, which would make them match both the CLM and the Admin queue.) The chain is monotonic:
+  // cm_ok implies clm_ok, and mkt_verified implies both.
+  for (const tbl of ['hcps', 'chemists']) {
+    await q.run(`UPDATE ${tbl} SET clm_ok=1 WHERE cm_ok=1 AND clm_ok=0`);
+    await q.run(`UPDATE ${tbl} SET clm_ok=1, cm_ok=1 WHERE mkt_verified=1 AND verified=0 AND (clm_ok=0 OR cm_ok=0)`);
+  }
+
+  // --- Field verification: dedicated demo accounts, one per stage, with explicit flags so the
+  // spread is deterministic regardless of any accumulated state on the database. ---
+  const H = (id, name, spec, city, terr, rep, country, flags) => q.run(
+    `INSERT OR IGNORE INTO hcps
+       (id,name,qualification,speciality,clinic,city,territory,rep_id,class,category,country,
+        verified,mkt_verified,clm_ok,cm_ok,add_reason,mkt_note,created_by,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id, name, 'MBChB', spec, `${name.split(' ').pop()} Clinic`, city, terr, rep, 'Pearl', 'C', country,
+     0, flags.mkt_verified || 0, flags.clm_ok || 0, flags.cm_ok || 0,
+     'New KOL met in the field — requesting master addition', flags.mkt_note || null, rep, now]);
+  await H('DVH1', 'Dr. Amara Otieno', 'Cardiology', 'Nairobi', 'Kenya', 'EMP001', 'KE', {});                     // CLM stage (Kenya)
+  await H('DVH2', 'Dr. Brian Ssali', 'Diabetology', 'Kampala', 'Uganda', 'EMP002', 'UG', { clm_ok: 1 });         // CM stage
+  await H('DVH3', 'Dr. Neema Kessy', 'Oncology', 'Dar es Salaam', 'Tanzania', 'EMP003', 'TZ', { clm_ok: 1, cm_ok: 1 }); // Marketing stage
+  await q.run(
+    `INSERT OR IGNORE INTO chemists (id,name,address,city,rep_id,is_hospital_in_house,type,country,verified,mkt_verified,clm_ok,cm_ok,add_reason,mkt_note)
+     VALUES ('DVC1','Karen Corner Pharmacy','Karen Road','Nairobi','EMP001',0,'Retail','KE',0,1,1,1,?,?)`,
+    ['New retail outlet opened in territory', 'Trade licence verified — approved to add']);                       // Admin stage (Kenya)
+  // A removal request pending at the CM stage (Zambia).
+  await q.run(
+    `INSERT OR IGNORE INTO hcps (id,name,qualification,speciality,clinic,city,territory,rep_id,class,category,country,verified,mkt_verified,pending_removal,removal_reason,removal_clm_ok,created_at)
+     VALUES ('DVH4','Dr. Chola Bwalya','MBChB','Cardiology','Bwalya Clinic','Lusaka','Zambia','EMP006','Ruby','B','ZM',1,1,1,?,1,?)`,
+    ['Doctor relocated out of territory', now]);
+}
+
 async function seedIfEmpty(q) {
   const row = await q.get('SELECT COUNT(*) AS c FROM users');
   if (row && Number(row.c) > 0) return;
@@ -266,4 +335,4 @@ async function seedIfEmpty(q) {
   console.log('Seeded East Africa pool (Apr 2025 – Jun 2026, fiscal April, 2 reps in KE & TZ).');
 }
 
-module.exports = { seedIfEmpty, ensureManagementUsers };
+module.exports = { seedIfEmpty, ensureManagementUsers, ensureDemoApprovals };

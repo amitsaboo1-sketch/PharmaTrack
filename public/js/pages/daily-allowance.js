@@ -5,8 +5,12 @@ const STAGE_LABEL = { clm: 'Cluster Lead (CLM)', cm: 'Country Manager (CM)', adm
 
 export default async function dailyAllowancePage(root) {
   const user = session.user;
-  if (user.role === 'ho' || user.role === 'clm' || user.role === 'cm') return approvalView(root, user);
-  return repView(root, user);
+  const isAdmin = user.role === 'ho' && user.sub_role === 'Admin';
+  // DA chain is SER -> CLM -> CM -> Admin. Marketing / Finance are not involved.
+  if (isAdmin || user.role === 'clm' || user.role === 'cm') return approvalView(root, user);
+  if (user.role === 'sales') return repView(root, user);
+  root.append(h('div', { class: 'empty' },
+    'Daily allowance approvals are handled by the Cluster Lead (CLM), Country Manager (CM) and Admin — your role is not part of this flow.'));
 }
 
 // ---------------- Rep view: log claims + attach expenses ----------------
