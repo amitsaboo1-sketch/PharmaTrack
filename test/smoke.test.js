@@ -289,7 +289,23 @@ test('critical path', async () => {
   assert.equal(daDecision.status, 200);
   assert.equal(daDecision.data.stage, 'approved');
 
-  // 11. rollback batch
+  // 11. Admin creates users with the real designations; SER/CLM must carry a country.
+  const serNoCountry = await call('/users', { method: 'POST', token: admin,
+    body: { name: 'Test SER', email: 'test.ser@pharos.demo', role: 'sales', subRole: 'Sales Executive Representative' } });
+  assert.equal(serNoCountry.status, 400); // country required for a SER
+  const clmCreate = await call('/users', { method: 'POST', token: admin,
+    body: { name: 'Test CLM', email: 'test.clm@pharos.demo', role: 'clm', subRole: 'Cluster Lead Manager', country: 'KE' } });
+  assert.equal(clmCreate.status, 200);
+  assert.ok(clmCreate.data.id.startsWith('CLM'));
+  const usersList = await call('/users', { token: admin });
+  const madeClm = usersList.data.find((u) => u.email === 'test.clm@pharos.demo');
+  assert.equal(madeClm.role, 'clm');
+  assert.equal(madeClm.country, 'KE');
+  // non-admin cannot manage users
+  const salesUsers = await call('/users', { token: rep });
+  assert.equal(salesUsers.status, 403);
+
+  // 12. rollback batch
   const rb = await call(`/sales/batches/${commit.data.batchId}/rollback`, { method: 'POST', token: ho, body: {} });
   assert.equal(rb.status, 200);
 });

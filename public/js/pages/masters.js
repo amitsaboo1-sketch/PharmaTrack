@@ -422,8 +422,35 @@ async function brands(root) {
   }
 }
 
+// The six designations in the org model, each mapping to the internal role + sub_role the
+// backend expects: [key, label, role, sub_role]. Marketing/Finance/Operations are Head-Office
+// (role 'ho') distinguished by sub_role; SER/CLM/CM are their own roles.
+const DESIGNATIONS = [
+  ['SER', 'Sales Executive Representative (SER)', 'sales', 'Sales Executive Representative'],
+  ['CLM', 'Cluster Lead Manager (CLM)', 'clm', 'Cluster Lead Manager'],
+  ['CM', 'Country Manager (CM)', 'cm', 'Country Manager'],
+  ['MKT', 'Marketing', 'ho', 'Product Manager'],
+  ['FIN', 'Finance', 'ho', 'Finance'],
+  ['OPS', 'Operations', 'ho', 'Admin'],
+];
+const COUNTRY_SCOPED = ['sales', 'clm']; // a SER and a CLM belong to one country
+
+// Friendly designation for display, derived from the stored role + sub_role.
+function designationLabel(role, subRole) {
+  if (role === 'sales') return 'Sales Executive Representative (SER)';
+  if (role === 'clm') return 'Cluster Lead Manager (CLM)';
+  if (role === 'cm') return 'Country Manager (CM)';
+  if (role === 'ho') {
+    if (['Product Manager', 'Marketing Head', 'Marketing'].includes(subRole)) return 'Marketing';
+    if (subRole === 'Finance') return 'Finance';
+    if (subRole === 'Admin') return 'Operations';
+  }
+  return subRole || role;
+}
+
 async function users(root) {
   const listBox = h('div');
+  const countries = await api('/countries');
   root.append(h('div', { class: 'page-head' },
     h('div', { class: 'spacer' }),
     h('button', { class: 'btn primary', onclick: addUser }, '+ Add User')),
@@ -433,29 +460,38 @@ async function users(root) {
     const rows = await api('/users');
     listBox.innerHTML = '';
     listBox.append(h('div', { class: 'card' },
-      table(['ID', 'Name', 'Email', 'Role', 'Territory', 'Active'],
-        rows.map((u) => [u.id, h('b', {}, u.name), u.email, `${u.role} · ${u.sub_role}`, u.territory || '—',
+      table(['ID', 'Name', 'Email', 'Designation', 'Country', 'Active'],
+        rows.map((u) => [u.id, h('b', {}, u.name), u.email, designationLabel(u.role, u.sub_role),
+          u.country || (u.role === 'cm' ? 'All countries' : '—'),
           u.active ? h('span', { class: 'badge ok' }, 'Active') : h('span', { class: 'badge rejected' }, 'Disabled')]))));
   }
 
   function addUser() {
     const f = {
       name: h('input', { placeholder: 'Full name *' }), email: h('input', { type: 'email', placeholder: 'email *' }),
-      role: select([['sales', 'Sales'], ['ho', 'Head Office']]),
-      subRole: select([['Medical Representative', 'Medical Representative'], ['Territory Manager', 'Territory Manager'], ['Area Manager', 'Area Manager'], ['Regional Manager', 'Regional Manager'], ['Product Manager', 'Product Manager'], ['Marketing Head', 'Marketing Head'], ['Finance', 'Finance'], ['Admin', 'Admin']]),
-      territory: h('input', { placeholder: 'Territory' }),
+      designation: select(DESIGNATIONS.map((d) => [d[0], d[1]])),
+      country: select([['', '— Head office / all countries'], ...countries.map((c) => [c.code, c.name])]),
+      territory: h('input', { placeholder: 'e.g. Nairobi Metro (optional)' }),
     };
     modal('Add User', [
       h('div', { class: 'form-row' }, field('Name *', f.name), field('Email *', f.email)),
-      h('div', { class: 'form-row' }, field('Role group', f.role), field('Designation', f.subRole)),
+      h('div', { class: 'form-row' }, field('Designation *', f.designation), field('Country', f.country)),
       field('Territory', f.territory),
+      h('div', { class: 'hint' }, 'Country is required for a Sales Executive (SER) and a Cluster Lead (CLM). A Country Manager, Marketing, Finance and Operations sit at head office (leave country blank).'),
     ], (close) => [
       h('button', { class: 'btn', onclick: close }, 'Cancel'),
       h('button', { class: 'btn primary', onclick: async () => {
         if (!f.name.value.trim() || !f.email.value.trim()) return toast('Name and email required', 'error');
-        const r = await api('/users', { method: 'POST', body: { name: f.name.value, email: f.email.value, role: f.role.value, subRole: f.subRole.value, territory: f.territory.value } });
-        toast(`User created — initial password: ${r.initialPassword}`, 'success');
-        close(); load();
+        const d = DESIGNATIONS.find((x) => x[0] === f.designation.value);
+        if (COUNTRY_SCOPED.includes(d[2]) && !f.country.value) return toast('Select a country for a SER or CLM', 'error');
+        try {
+          const r = await api('/users', { method: 'POST', body: {
+            name: f.name.value, email: f.email.value, role: d[2], subRole: d[3],
+            country: f.country.value || null, territory: f.territory.value,
+          } });
+          toast(`User created — initial password: ${r.initialPassword}`, 'success');
+          close(); load();
+        } catch { /* toast shown */ }
       } }, 'Create'),
     ]);
   }

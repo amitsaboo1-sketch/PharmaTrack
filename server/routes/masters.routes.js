@@ -274,15 +274,19 @@ router.get('/activity-types', ah(async (req, res) => res.json(await q.all('SELEC
 
 // ---------- Users (admin) ----------
 router.get('/users', requireAdmin, ah(async (req, res) => {
-  res.json(await q.all('SELECT id,name,email,role,sub_role,territory,region,active FROM users ORDER BY id'));
+  res.json(await q.all('SELECT id,name,email,role,sub_role,territory,region,country,active FROM users ORDER BY id'));
 }));
 router.post('/users', requireAdmin, ah(async (req, res) => {
   const b = req.body || {};
   if (!b.name || !b.email || !b.role) return res.status(400).json({ error: 'name, email, role are required' });
-  const id = b.id || await genId(q, b.role === 'ho' ? 'HO0' : 'EMP0', 'users');
+  if (!['sales', 'clm', 'cm', 'ho'].includes(b.role)) return res.status(400).json({ error: 'invalid role' });
+  // A field rep (SER) and a Cluster Lead (CLM) are scoped to a country — require one.
+  if (['sales', 'clm'].includes(b.role) && !b.country) return res.status(400).json({ error: 'country is required for SER and CLM' });
+  const prefix = { sales: 'EMP0', clm: 'CLM0', cm: 'CM0', ho: 'HO0' }[b.role] || 'USR0';
+  const id = b.id || await genId(q, prefix, 'users');
   const password = b.password || 'welcome123';
-  await q.run(`INSERT INTO users (id,name,email,password_hash,role,sub_role,territory,region) VALUES (?,?,?,?,?,?,?,?)`,
-    [id, b.name, String(b.email).toLowerCase(), bcrypt.hashSync(password, 10), b.role, b.subRole || '', b.territory || '', b.region || '']);
+  await q.run(`INSERT INTO users (id,name,email,password_hash,role,sub_role,territory,region,country) VALUES (?,?,?,?,?,?,?,?,?)`,
+    [id, b.name, String(b.email).toLowerCase(), bcrypt.hashSync(password, 10), b.role, b.subRole || '', b.territory || '', b.region || 'East Africa Pool', b.country || null]);
   await audit(req, 'user.create', 'user', id, null, { ...b, password: undefined });
   res.json({ id, initialPassword: password });
 }));
