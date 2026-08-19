@@ -36,8 +36,13 @@ router.get('/performance/country/:code/products', ah(async (req, res) => {
 
 // Account-wise rep attribution + ROI (sales are country-wide, accounts are rep-owned).
 router.get('/performance/reps', ah(async (req, res) => {
-  const country = req.query.country || (req.user.role === 'sales' ? req.user.country : null);
-  res.json(await repAttribution(country));
+  // A SER and a CLM are scoped to their own country; CM/HO see the whole pool (or a filter).
+  const country = req.query.country || (['sales', 'clm'].includes(req.user.role) ? req.user.country : null);
+  const usd = !country;   // a single country → local currency; the whole pool → consolidated US$
+  const rows = await repAttribution(country, { usd });
+  let currency = 'USD';
+  if (country) { const c = await q.get('SELECT currency_code FROM countries WHERE code = ?', [country]); currency = (c && c.currency_code) || 'USD'; }
+  res.json({ rows, currency });
 }));
 
 // ---------- ROI ----------

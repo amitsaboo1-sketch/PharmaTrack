@@ -189,7 +189,16 @@ test('critical path', async () => {
   // account-wise rep attribution + ROI
   const repsPerf = await call('/performance/reps?country=KE', { token: ho });
   assert.equal(repsPerf.status, 200);
-  assert.ok(repsPerf.data.length >= 2); // Kenya has 2 reps
+  assert.ok(repsPerf.data.rows.length >= 2); // Kenya has 2 reps
+  assert.equal(repsPerf.data.currency, 'KES'); // single-country filter -> local currency
+  const repsPool = await call('/performance/reps', { token: ho });
+  assert.equal(repsPool.data.currency, 'USD'); // whole pool -> consolidated US$
+  // CLM (Kenya) reports: own country report loads, reps come back scoped to Kenya in local currency
+  const clmCountry = await call('/performance/country/KE', { token: clm });
+  assert.equal(clmCountry.status, 200);
+  const clmReps = await call('/performance/reps', { token: clm });
+  assert.equal(clmReps.data.currency, 'KES');
+  assert.ok(clmReps.data.rows.length >= 1 && clmReps.data.rows.every((r) => r.country === 'KE'));
 
   // chemist / wholesaler activity ROI (ACT006 = Kampala Wholesaler Trade Meet)
   const chemRoi = await call('/roi/activity/ACT006', { token: ho });

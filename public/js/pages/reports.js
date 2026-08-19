@@ -4,24 +4,30 @@ import { h, table, badge, kpiCard, fmtMoney, fmtUnits, fmtPct, fmtDate, select, 
 export default async function reportsPage(root) {
   let user = session.user;
   try { user = await api('/auth/me'); session.set(session.token, user); } catch { /* keep cached */ }
-  if (user.role === 'sales') return salesReports(root, user);
+  // A SER and a CLM are scoped to one country → the in-app country report. CM/HO span all
+  // countries → the pool report with exports.
+  if (user.role === 'sales' || user.role === 'clm') return salesReports(root, user);
   return hoReports(root);
 }
 
-// ============ Sales: full in-app analytics — filters + graphs, no downloads ============
+// ============ Country in-app analytics — filters + graphs (SER: own accounts; CLM: whole country) ============
 async function salesReports(root, user) {
+  const isCLM = user.role === 'clm';
   root.append(h('div', { class: 'hint', style: 'margin-bottom:14px;' },
-    '📊 All reports are shown here in the app — filter and explore. Data export is disabled for field users.'));
+    isCLM
+      ? `📊 Country reports for ${user.territory || user.country} — your cluster's performance across every rep in your country. Filter and explore below.`
+      : '📊 All reports are shown here in the app — filter and explore. Data export is disabled for field users.'));
 
   const [dash, perf, prod, reps, activityTypes, brands, da] = await Promise.all([
     api('/dashboards/sales').catch(() => null),
     user.country ? api(`/performance/country/${user.country}`).catch(() => null) : Promise.resolve(null),
     user.country ? api(`/performance/country/${user.country}/products`).catch(() => null) : Promise.resolve(null),
-    api('/performance/reps').catch(() => []),
+    api('/performance/reps').catch(() => ({ rows: [] })),
     api('/activity-types').catch(() => []),
     api('/brands').catch(() => []),
     api('/da').catch(() => []),
   ]);
+  const repRows = reps.rows || [];
   const cur = perf ? perf.country.currency : null;
 
   // ---------- summary ----------
@@ -30,7 +36,9 @@ async function salesReports(root, user) {
     root.append(h('div', { class: 'grid cards-4' },
       kpiCard('Value Achievement (YTD)', o.valuePct == null ? '—' : `${o.valuePct.toFixed(0)}%`, `${fmtMoney(o.achievedValue, cur)} / ${fmtMoney(o.targetValue, cur)}`, (o.valuePct ?? 0) >= 100 ? 'up' : 'down'),
       kpiCard('YoY Growth (value)', fmtPct(perf.yoy.valueYoYPct), `vs ${perf.yoy.lastFyLabel}`, (perf.yoy.valueYoYPct ?? 0) >= 0 ? 'up' : 'down'),
-      kpiCard('My Activity Marketing Effectiveness', fmtPct(dash?.myRoiPct), `account-wise`, (dash?.myRoiPct ?? 0) >= 0 ? 'up' : 'down'),
+      isCLM
+        ? kpiCard('Reporting scope', user.territory || user.country, 'Whole country (all reps)')
+        : kpiCard('My Activity Marketing Effectiveness', fmtPct(dash?.myRoiPct), 'account-wise', (dash?.myRoiPct ?? 0) >= 0 ? 'up' : 'down'),
       kpiCard('Reporting period', perf.fyLabel, perf.ytdLabel)));
   }
 
@@ -106,12 +114,12 @@ async function salesReports(root, user) {
   }
 
   // ---------- 5) Account-wise Rep Marketing Effectiveness ----------
-  if (reps.length) {
+  if (repRows.length) {
     root.append(sectionCard('Rep Marketing Effectiveness — account-wise attribution',
       h('div', { class: 'hint', style: 'margin-bottom:8px;' },
         'Sales are country-wide, but every doctor/chemist is owned by one rep. Each rep\'s sales = sales through their accounts; Marketing Effectiveness = incremental on those accounts ÷ their activity spend.'),
       table(['Rep', 'Country', 'Owned Doctors', 'Owned Chemists', 'Account Sales (YTD)', 'Activities', 'Spend', 'Incremental', 'Marketing Effectiveness'],
-        reps.map((r) => [h('b', {}, r.name), r.country, String(r.ownedDoctors), String(r.ownedChemists),
+        repRows.map((r) => [h('b', {}, r.name), r.country, String(r.ownedDoctors), String(r.ownedChemists),
           fmtMoney(r.accountSalesYTD, cur), String(r.activities), fmtMoney(r.spend, cur), fmtMoney(r.incremental, cur),
           r.roiPct == null ? h('span', { class: 'hint' }, 'n/a') : h('b', { style: `color:${r.roiPct >= 0 ? 'var(--accent)' : 'var(--danger)'}` }, fmtPct(r.roiPct))]))));
   }
@@ -206,12 +214,15 @@ async function hoReports(root) {
         fmtMoney(p.overall.targetValue, p.currency), fmtMoney(p.overall.achievedValue, p.currency),
         pctText(p.overall.valuePct), yoyText(p.yoy?.valueYoYPct)]))));
 
-  const reps = await api('/performance/reps').catch(() => []);
+  const repsResp = await api('/performance/reps').catch(() => ({ rows: [], currency: 'USD' }));
+  const reps = repsResp.rows || [];
+  const repCur = repsResp.currency || 'USD';   // pooled across countries → consolidated US$
   if (reps.length) root.append(h('div', { class: 'card', style: 'margin-top:14px;' },
     h('h3', {}, 'Rep Marketing Effectiveness — account-wise attribution'),
+    h('div', { class: 'hint', style: 'margin-bottom:8px;' }, `Money consolidated in ${repCur} across all countries.`),
     table(['Rep', 'Country', 'Doctors', 'Chemists', 'Account Sales (YTD)', 'Activities', 'Spend', 'Incremental', 'Marketing Effectiveness'],
       reps.map((r) => [h('b', {}, r.name), r.country, String(r.ownedDoctors), String(r.ownedChemists),
-        fmtMoney(r.accountSalesYTD), String(r.activities), fmtMoney(r.spend), fmtMoney(r.incremental),
+        fmtMoney(r.accountSalesYTD, repCur), String(r.activities), fmtMoney(r.spend, repCur), fmtMoney(r.incremental, repCur),
         r.roiPct == null ? h('span', { class: 'hint' }, 'n/a') : h('b', { style: `color:${r.roiPct >= 0 ? 'var(--accent)' : 'var(--danger)'}` }, fmtPct(r.roiPct))]))));
 
   const catalog = [
@@ -219,7 +230,7 @@ async function hoReports(root) {
     ['doctor-roi', 'Doctor Marketing Effectiveness'], ['employee-roi', 'Employee Marketing Effectiveness'], ['brand-roi', 'Brand Marketing Effectiveness'],
     ['sales', 'Sales Data'], ['audit', 'Audit Report'],
   ];
-  root.append(h('h3', { style: 'margin:20px 0 10px;' }, 'Finance & Audit exports (Head Office only)'));
+  root.append(h('h3', { style: 'margin:20px 0 10px;' }, 'Finance & Audit exports (CSV)'));
   root.append(h('div', { class: 'grid cards-4' },
     catalog.map(([key, title]) => h('div', { class: 'card' },
       h('h3', {}, title),

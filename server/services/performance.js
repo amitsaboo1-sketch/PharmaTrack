@@ -168,10 +168,15 @@ async function countryProducts(code) {
 }
 
 // ---------- account-wise rep attribution + ROI ----------
-async function repAttribution(countryFilter) {
+// `usd:true` converts each rep's money to US$ (by their country rate) so a multi-country table
+// is comparable; a single-country view keeps local currency.
+async function repAttribution(countryFilter, { usd = false } = {}) {
   const { computeActivityROI, cfgNum } = require('./roi');
   const w = await fiscalWindows();
   const margin = (await cfgNum('gross_margin_pct', 70)) / 100;
+  const rateOf = usd
+    ? Object.fromEntries((await q.all('SELECT code, usd_rate FROM countries')).map((c) => [c.code, c.usd_rate || 1]))
+    : null;
 
   const chemOwner = Object.fromEntries((await q.all('SELECT id, rep_id FROM chemists')).map((c) => [c.id, c.rep_id]));
   const hcpOwner = Object.fromEntries((await q.all('SELECT id, rep_id FROM hcps')).map((hc) => [hc.id, hc.rep_id]));
@@ -202,11 +207,12 @@ async function repAttribution(countryFilter) {
     const accounts = await q.get(`SELECT
         (SELECT COUNT(*) FROM hcps WHERE rep_id=?) AS docs,
         (SELECT COUNT(*) FROM chemists WHERE rep_id=?) AS chems`, [rep.id, rep.id]);
+    const r = usd ? (rateOf[rep.country] || 1) : 1;   // divide local amounts by local-per-USD
     out.push({
       repId: rep.id, name: rep.name, country: rep.country,
       ownedDoctors: Number(accounts.docs), ownedChemists: Number(accounts.chems),
-      accountSalesYTD: repSales[rep.id] || 0,
-      activities: acts.length, spend, incremental, roiPct,
+      accountSalesYTD: (repSales[rep.id] || 0) / r,
+      activities: acts.length, spend: spend / r, incremental: incremental / r, roiPct,
     });
   }
   return out;
